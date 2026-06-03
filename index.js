@@ -317,13 +317,13 @@
     T = null,
     E = [],
     b = null,
-    K = null;
+    K = [];
   var J = {
     onLoad() {
       try {
         const reg = globalThis.vendetta?.commands?.registerCommand;
         if (typeof reg === "function") {
-          K = reg({
+          const u1 = reg({
             name: "spoofer",
             displayName: "spoofer",
             description: "Open the Local Message Spoofer panel.",
@@ -336,6 +336,49 @@
               openPanel();
             },
           });
+          if (typeof u1 === "function") K.push(u1);
+          const u2 = reg({
+            name: "filluid",
+            displayName: "filluid",
+            description:
+              "Fill the spoofer User ID from this chat, or pass a specific ID.",
+            displayDescription:
+              "Fill the spoofer User ID from this chat, or pass a specific ID.",
+            type: 1,
+            inputType: 1,
+            applicationId: "-1",
+            options: [
+              {
+                name: "userid",
+                displayName: "userid",
+                description: "Optional: a specific user ID to set.",
+                displayDescription: "Optional: a specific user ID to set.",
+                type: 3,
+                required: !1,
+              },
+            ],
+            execute: function (args) {
+              try {
+                const map = Array.isArray(args)
+                  ? Object.fromEntries(
+                      args.map(function (aa) {
+                        return [aa?.name, aa?.value];
+                      }),
+                    )
+                  : args ?? {};
+                let id = ("" + (map.userid ?? "")).trim();
+                if (!id) id = fillFromChat();
+                if (id) {
+                  e.storage.userId = id;
+                  tt("User ID set: " + id);
+                } else
+                  tt("No user found here. Try: /filluid userid:123456789");
+              } catch (err2) {
+                tt("Couldn't set the User ID.");
+              }
+            },
+          });
+          if (typeof u2 === "function") K.push(u2);
         }
       } catch {}
       b = y.before("dispatch", n.FluxDispatcher, function (s) {
@@ -469,9 +512,13 @@
     },
     onUnload() {
       try {
-        K && K();
+        K.forEach(function (fn) {
+          try {
+            fn();
+          } catch {}
+        });
       } catch {}
-      K = null;
+      K = [];
       (D && (D(), (D = null)),
         T && (n.FluxDispatcher.unsubscribe("CHANNEL_SELECT", T), (T = null)),
         b && (b(), (b = null)),
