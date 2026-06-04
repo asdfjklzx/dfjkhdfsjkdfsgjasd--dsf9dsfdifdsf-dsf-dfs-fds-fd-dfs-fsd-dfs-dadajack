@@ -246,16 +246,44 @@
       if (N2 && typeof N2.pop === "function") return void N2.pop();
     } catch {}
   }
-  function openPanel() {
-    // Full-screen push only. The modal "push" path crashes on some iOS
-    // clients (isVoiceChannelModalKey during the modal safe-area render),
-    // so we deliberately avoid it and never push as a modal.
+  function PanelSheet() {
+    const RN = n.ReactNative || l.findByProps("ScrollView", "View");
+    let ActionSheet = null;
     try {
-      const Nav = l.findByProps("pushLazy");
-      if (Nav && typeof Nav.pushLazy === "function") {
-        Nav.pushLazy(
-          Promise.resolve({ default: J.settings }),
-          "LocalMessageSpoofer",
+      ActionSheet =
+        (l.findByProps("ActionSheet", "ActionSheetRow") || {}).ActionSheet ||
+        (l.findByProps("ActionSheet") || {}).ActionSheet ||
+        (l.findByProps("ActionSheetRow") || {}).ActionSheet ||
+        null;
+    } catch {}
+    const body = n.React.createElement(
+      RN.ScrollView,
+      { style: { maxHeight: 560 } },
+      n.React.createElement(J.settings, { inSheet: !0 }),
+    );
+    if (ActionSheet) return n.React.createElement(ActionSheet, {}, body);
+    return n.React.createElement(
+      RN.View,
+      {
+        style: {
+          backgroundColor: "#1e1f22",
+          borderTopLeftRadius: 16,
+          borderTopRightRadius: 16,
+          paddingTop: 8,
+        },
+      },
+      body,
+    );
+  }
+  function openPanel() {
+    // Open as an action sheet (portal layer). The navigation push/modal path
+    // crashes the app's root SafeAreaWrapper on some iOS clients, so we avoid
+    // it entirely and use the action sheet system instead.
+    try {
+      if (_ && typeof _.openLazy === "function") {
+        _.openLazy(
+          Promise.resolve({ default: PanelSheet }),
+          "LocalMessageSpooferSheet",
           {},
         );
         return;
@@ -548,7 +576,7 @@
         (E = []),
         I.clear());
     },
-    settings: function () {
+    settings: function (props) {
       const [tick, setTick] = n.React.useState(0);
       let nav = null;
       try {
@@ -579,7 +607,13 @@
               })
             : void 0,
           onPress: function () {
-            closePanel(nav);
+            if (props && props.inSheet) {
+              try {
+                _.hideActionSheet();
+              } catch {}
+            } else {
+              closePanel(nav);
+            }
           },
         }),
         n.React.createElement(
