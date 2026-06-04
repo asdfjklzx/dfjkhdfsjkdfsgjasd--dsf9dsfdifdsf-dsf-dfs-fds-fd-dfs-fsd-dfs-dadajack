@@ -84,12 +84,6 @@
       });
       try {
         n.FluxDispatcher.dispatch({
-          type: "CHANNEL_UPDATE",
-          channel: { id: r, last_message_id: d },
-        });
-      } catch {}
-      try {
-        n.FluxDispatcher.dispatch({
           type: "MESSAGE_ACK",
           channelId: r,
           messageId: d,
@@ -253,32 +247,13 @@
     } catch {}
   }
   function openPanel() {
-    const renderFn = function () {
-      return n.React.createElement(J.settings);
-    };
-    const params = { render: renderFn, title: "Message Spoofer" };
-    let routes = ["VendettaCustomPage", "BunnyCustomPage", "RevengeCustomPage"];
+    // Full-screen push only. The modal "push" path crashes on some iOS
+    // clients (isVoiceChannelModalKey during the modal safe-area render),
+    // so we deliberately avoid it and never push as a modal.
     try {
-      if (typeof globalThis !== "undefined" && globalThis.bunny)
-        routes = ["BunnyCustomPage", "VendettaCustomPage", "RevengeCustomPage"];
-      else if (typeof globalThis !== "undefined" && globalThis.revenge)
-        routes = ["RevengeCustomPage", "VendettaCustomPage", "BunnyCustomPage"];
-    } catch {}
-    try {
-      const Nav = l.findByProps("push", "pop", "popToTop");
-      if (Nav && typeof Nav.push === "function") {
-        for (const route of routes) {
-          try {
-            Nav.push(route, params);
-            return;
-          } catch {}
-        }
-      }
-    } catch {}
-    try {
-      const Nav2 = l.findByProps("pushLazy");
-      if (Nav2 && typeof Nav2.pushLazy === "function") {
-        Nav2.pushLazy(
+      const Nav = l.findByProps("pushLazy");
+      if (Nav && typeof Nav.pushLazy === "function") {
+        Nav.pushLazy(
           Promise.resolve({ default: J.settings }),
           "LocalMessageSpoofer",
           {},
@@ -286,19 +261,38 @@
         return;
       }
     } catch {}
-    tt("Couldn't open the panel automatically. Open it from Plugins settings.");
+    tt("Couldn't open the panel on this client. Open it from the Plugins list.");
   }
   function fillFromChat() {
     try {
       const ch = Y();
       if (!ch) return null;
-      const channel = O?.getChannel?.(ch);
+      let channel = null;
+      try {
+        channel = O?.getChannel?.(ch);
+      } catch {}
+      if (!channel) {
+        try {
+          channel = l.findByStoreName("ChannelStore")?.getChannel?.(ch);
+        } catch {}
+      }
+      // DM recipient first - works even with zero message history.
       let rec = channel?.recipients;
       if (rec && rec.length) {
         let id = rec[0];
         if (id && typeof id === "object") id = id.id || id.userId || id.user_id;
         if (id) return "" + id;
       }
+      let raw = channel?.rawRecipients;
+      if (raw && raw.length && raw[0]) {
+        const id = raw[0].id || raw[0].user_id;
+        if (id) return "" + id;
+      }
+      try {
+        const ids = l.findByProps("getDMUserIds")?.getDMUserIds?.(ch);
+        if (ids && ids.length) return "" + ids[0];
+      } catch {}
+      // Fallback: last message from someone other than you.
       let arr = [];
       try {
         const msgs = G?.getMessages?.(ch);
@@ -312,6 +306,17 @@
       }
     } catch {}
     return null;
+  }
+  function clearSaved() {
+    try {
+      const count = (e.storage.savedMessages || []).length;
+      L([]);
+      tt(
+        "Cleared " + count + " saved message" + (count === 1 ? "" : "s") + ".",
+      );
+    } catch {
+      tt("Couldn't clear saved messages.");
+    }
   }
   let D = null,
     T = null,
@@ -379,6 +384,21 @@
             },
           });
           if (typeof u2 === "function") K.push(u2);
+          const u3 = reg({
+            name: "clearfakes",
+            displayName: "clearfakes",
+            description: "Clear all saved fake messages (stops them replaying).",
+            displayDescription:
+              "Clear all saved fake messages (stops them replaying).",
+            type: 1,
+            inputType: 1,
+            applicationId: "-1",
+            options: [],
+            execute: function () {
+              clearSaved();
+            },
+          });
+          if (typeof u3 === "function") K.push(u3);
         }
       } catch {}
       b = y.before("dispatch", n.FluxDispatcher, function (s) {
@@ -752,6 +772,27 @@
               "Format: userId [time] [^reply] - message. 'me' = you, 'them' = the User ID above. Reply with ^N (the Nth message) or ^ (previous message). Time optional (9pm, 21:00, 2024-12-25 14:30); untimed lines are spaced 1 min apart. Honors the UTC toggle.",
             onPress: async function () {
               await runConvo();
+            },
+          }),
+        ),
+        n.React.createElement(
+          N,
+          { title: "Saved Messages" },
+          n.React.createElement(A, {
+            label: "Clear Saved Messages",
+            subLabel:
+              u +
+              " saved. These replay each time you reopen a channel - clearing stops that.",
+            leading: A.Icon
+              ? n.React.createElement(A.Icon, {
+                  source: B.getAssetIDByName("ic_trash_24px"),
+                })
+              : void 0,
+            onPress: function () {
+              clearSaved();
+              setTick(function (kk) {
+                return kk + 1;
+              });
             },
           }),
         ),
