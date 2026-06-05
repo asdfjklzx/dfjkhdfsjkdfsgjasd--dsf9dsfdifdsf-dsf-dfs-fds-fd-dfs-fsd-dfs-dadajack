@@ -91,6 +91,186 @@
           immediate: !0,
         });
       } catch {}
+      try {
+        addLinkEmbeds(r, h, c);
+      } catch {}
+    } catch {}
+  }
+  function decodeEntities(str) {
+    return ("" + str)
+      .replace(/&amp;/g, "&")
+      .replace(/&quot;/g, '"')
+      .replace(/&#0?39;/g, "'")
+      .replace(/&apos;/g, "'")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&#x2F;/gi, "/")
+      .trim();
+  }
+  async function fetchT(url, ms, opts) {
+    const ctl =
+      typeof AbortController === "function" ? new AbortController() : null;
+    const timer = ctl
+      ? setTimeout(function () {
+          try {
+            ctl.abort();
+          } catch {}
+        }, ms || 8000)
+      : null;
+    try {
+      return await fetch(
+        url,
+        Object.assign({}, opts, ctl ? { signal: ctl.signal } : {}),
+      );
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+  function metaTag(html, prop) {
+    try {
+      let m = html.match(
+        new RegExp(
+          '<meta[^>]+(?:property|name)=["\\\']' +
+            prop +
+            '["\\\'][^>]*?content=["\\\']([^"\\\']*)["\\\']',
+          "i",
+        ),
+      );
+      if (m && m[1]) return decodeEntities(m[1]);
+      m = html.match(
+        new RegExp(
+          '<meta[^>]+content=["\\\']([^"\\\']*)["\\\'][^>]*?(?:property|name)=["\\\']' +
+            prop +
+            '["\\\']',
+          "i",
+        ),
+      );
+      if (m && m[1]) return decodeEntities(m[1]);
+    } catch {}
+    return null;
+  }
+  async function fetchYouTube(url) {
+    try {
+      const res = await fetchT(
+        "https://www.youtube.com/oembed?format=json&url=" +
+          encodeURIComponent(url),
+        8000,
+      );
+      if (!res || !res.ok) return null;
+      const data = await res.json();
+      const embed = {
+        type: "rich",
+        url: url,
+        color: 0xff0000,
+        footer: { text: "YouTube" },
+      };
+      if (data.title) embed.title = ("" + data.title).slice(0, 256);
+      if (data.author_name)
+        embed.author = { name: data.author_name, url: data.author_url };
+      if (data.thumbnail_url)
+        embed.image = {
+          url: data.thumbnail_url,
+          proxy_url: data.thumbnail_url,
+          width: data.thumbnail_width || 1280,
+          height: data.thumbnail_height || 720,
+        };
+      return embed;
+    } catch {
+      return null;
+    }
+  }
+  async function fetchOpenGraph(url) {
+    try {
+      const res = await fetchT(url, 8000, {
+        headers: {
+          Accept: "text/html,application/xhtml+xml",
+          "User-Agent":
+            "Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)",
+        },
+      });
+      if (!res || !res.ok) return null;
+      let html = await res.text();
+      if (html && html.length > 6e5) html = html.slice(0, 6e5);
+      const title =
+        metaTag(html, "og:title") ||
+        metaTag(html, "twitter:title") ||
+        (function () {
+          const m = html.match(/<title[^>]*>([^<]*)<\/title>/i);
+          return m ? decodeEntities(m[1]) : null;
+        })();
+      const desc =
+        metaTag(html, "og:description") ||
+        metaTag(html, "twitter:description") ||
+        metaTag(html, "description");
+      const image =
+        metaTag(html, "og:image") ||
+        metaTag(html, "og:image:url") ||
+        metaTag(html, "twitter:image");
+      const site = metaTag(html, "og:site_name");
+      if (!title && !desc && !image) return null;
+      const embed = { type: "rich", url: url, color: 0x4f545c };
+      if (title) embed.title = title.slice(0, 256);
+      if (desc) embed.description = desc.slice(0, 350);
+      if (site) embed.footer = { text: site };
+      if (image)
+        embed.image = {
+          url: image,
+          proxy_url: image,
+        };
+      return embed;
+    } catch {
+      return null;
+    }
+  }
+  async function fetchOneEmbed(url) {
+    try {
+      if (
+        /(?:youtube\.com\/watch\?|youtu\.be\/|youtube\.com\/shorts\/|youtube\.com\/embed\/)/i.test(
+          url,
+        )
+      )
+        return await fetchYouTube(url);
+      if (/\.(png|jpe?g|gif|webp|bmp)(\?|#|$)/i.test(url))
+        return {
+          type: "image",
+          url: url,
+          image: { url: url, proxy_url: url },
+        };
+      return await fetchOpenGraph(url);
+    } catch {
+      return null;
+    }
+  }
+  async function fetchEmbeds(content) {
+    const out = [];
+    try {
+      const urls = ("" + (content || "")).match(/https?:\/\/[^\s<>]+/g) || [];
+      const seen = {};
+      for (let i2 = 0; i2 < urls.length && out.length < 4; i2++) {
+        let url = urls[i2].replace(/[)\]\.,!?'"]+$/, "");
+        if (seen[url]) continue;
+        seen[url] = !0;
+        const em = await fetchOneEmbed(url);
+        if (em) out.push(em);
+      }
+    } catch {}
+    return out;
+  }
+  function addLinkEmbeds(channelId, message, content) {
+    try {
+      if (!/https?:\/\//i.test("" + (content || ""))) return;
+      fetchEmbeds(content)
+        .then(function (embeds) {
+          if (!embeds || !embeds.length) return;
+          try {
+            n.FluxDispatcher.dispatch({
+              type: "MESSAGE_UPDATE",
+              message: Object.assign({}, message, { embeds: embeds }),
+              otherPluginBypass: !0,
+            });
+          } catch {}
+        })
+        .catch(function () {});
     } catch {}
   }
   function L(r) {
@@ -247,32 +427,37 @@
     } catch {}
   }
   function PanelSheet() {
+    const panel = n.React.createElement(J.settings, { inSheet: !0 });
     const RN = n.ReactNative || l.findByProps("ScrollView", "View");
-    let ActionSheet = null;
+    if (!RN || !RN.ScrollView) return panel;
+    let screenH = 800;
     try {
-      ActionSheet =
-        (l.findByProps("ActionSheet", "ActionSheetRow") || {}).ActionSheet ||
-        (l.findByProps("ActionSheet") || {}).ActionSheet ||
-        (l.findByProps("ActionSheetRow") || {}).ActionSheet ||
-        null;
+      if (RN.Dimensions && RN.Dimensions.get)
+        screenH = RN.Dimensions.get("window").height || 800;
     } catch {}
-    const body = n.React.createElement(
-      RN.ScrollView,
-      { style: { maxHeight: 560 } },
-      n.React.createElement(J.settings, { inSheet: !0 }),
-    );
-    if (ActionSheet) return n.React.createElement(ActionSheet, {}, body);
+    const sheetMax = Math.round(screenH * 0.88);
     return n.React.createElement(
       RN.View,
       {
         style: {
           backgroundColor: "#1e1f22",
-          borderTopLeftRadius: 16,
-          borderTopRightRadius: 16,
-          paddingTop: 8,
+          borderTopLeftRadius: 18,
+          borderTopRightRadius: 18,
+          paddingTop: 10,
+          maxHeight: sheetMax,
         },
       },
-      body,
+      n.React.createElement(
+        RN.ScrollView,
+        {
+          style: { maxHeight: sheetMax - 10 },
+          contentContainerStyle: { paddingBottom: 240 },
+          keyboardShouldPersistTaps: "handled",
+          showsVerticalScrollIndicator: !0,
+          nestedScrollEnabled: !0,
+        },
+        panel,
+      ),
     );
   }
   function openPanel() {
@@ -354,8 +539,20 @@
   var J = {
     onLoad() {
       try {
-        const reg = globalThis.vendetta?.commands?.registerCommand;
-        if (typeof reg === "function") {
+        K.forEach(function (fn) {
+          try {
+            fn();
+          } catch {}
+        });
+      } catch {}
+      K = [];
+      try {
+        const cmds = globalThis.vendetta?.commands;
+        const reg =
+          cmds && typeof cmds.registerCommand === "function"
+            ? cmds.registerCommand.bind(cmds)
+            : null;
+        if (reg) {
           const u1 = reg({
             name: "spoofer",
             displayName: "spoofer",
@@ -597,7 +794,7 @@
             ? e.storage.customMinute
             : t.getMinutes();
       return n.React.createElement(
-        v.Forms.Form,
+        props && props.inSheet ? n.React.Fragment : v.Forms.Form,
         {},
         n.React.createElement(A, {
           label: "Close Panel",
