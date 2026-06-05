@@ -16,19 +16,65 @@
   function x(r) {
     return ((new Date(r).getTime() - 14200704e5) * 4194304).toString();
   }
+  const resolving = new Set();
+  function extractId(x) {
+    try {
+      if (!x) return null;
+      if (typeof x === "string") return /^\d+$/.test(x) ? x : null;
+      if (x.id) return x.id;
+      if (x.userId) return x.userId;
+      if (x.user && x.user.id) return x.user.id;
+    } catch {}
+    return null;
+  }
+  function resolveName(uid) {
+    const prof = (e.storage.profiles || {})[uid];
+    if (!prof) return null;
+    if (prof.name) return prof.name;
+    if (prof.sourceId && !resolving.has(uid)) {
+      resolving.add(uid);
+      try {
+        const src = j.getUser(prof.sourceId);
+        if (src)
+          return src.globalName || src.global_name || src.username || null;
+      } catch {
+      } finally {
+        resolving.delete(uid);
+      }
+    }
+    return null;
+  }
+  function resolveAvatar(uid) {
+    const prof = (e.storage.profiles || {})[uid];
+    if (!prof) return null;
+    if (prof.sourceId && !resolving.has(uid)) {
+      resolving.add(uid);
+      try {
+        const src = j.getUser(prof.sourceId);
+        if (src && typeof src.getAvatarURL === "function") {
+          const u = src.getAvatarURL();
+          if (u) return u;
+        }
+      } catch {
+      } finally {
+        resolving.delete(uid);
+      }
+    }
+    return prof.avatar || null;
+  }
   function mkAuthor(uid) {
     let u = null;
     try {
-      u = F.getUser(uid);
+      u = j.getUser(uid);
     } catch {}
-    const prof = (e.storage.profiles || {})[uid] || null;
-    const nm = prof && prof.name ? prof.name : null;
+    const nm = resolveName(uid);
+    const av = resolveAvatar(uid);
     return {
       id: uid,
       username: nm || (u ? u.username : "FakeUser"),
       global_name: nm || (u ? u.globalName || u.global_name || null : null),
       discriminator: u ? u.discriminator : "0001",
-      avatar: prof && prof.avatar ? prof.avatar : u ? u.avatar : null,
+      avatar: av || (u ? u.avatar : null),
       bot: u ? u.bot : !1,
     };
   }
@@ -558,15 +604,31 @@
       }
       const name = ("" + (e.storage.profileName || "")).trim();
       const avatar = ("" + (e.storage.profileAvatar || "")).trim();
-      if (!name && !avatar) {
-        tt("Set a display name and/or an avatar URL.");
+      const sourceId = ("" + (e.storage.profileSource || ""))
+        .trim()
+        .replace(/[^0-9]/g, "");
+      if (!name && !avatar && !sourceId) {
+        tt("Set a name, avatar URL, or a source user ID.");
+        return;
+      }
+      if (sourceId && sourceId === id) {
+        tt("Source ID must differ from the user ID.");
         return;
       }
       const p = Object.assign({}, e.storage.profiles || {});
-      p[id] = { name: name || void 0, avatar: avatar || void 0 };
+      p[id] = {
+        name: name || void 0,
+        avatar: avatar || void 0,
+        sourceId: sourceId || void 0,
+      };
       e.storage.profiles = p;
       e.storage._lastUpdate = Date.now();
-      tt("Saved profile for " + id + ".");
+      tt(
+        "Saved profile for " +
+          id +
+          (sourceId ? " (mirroring " + sourceId + ")" : "") +
+          ".",
+      );
     } catch {
       tt("Couldn't save that profile.");
     }
@@ -698,10 +760,11 @@
           E.push(
             y.after("getUserAvatarURL", AV, function (a, ret) {
               try {
-                const usr = a && a[0];
-                const id = usr && (usr.id || usr.userId);
-                const prof = id && (e.storage.profiles || {})[id];
-                if (prof && prof.avatar) return prof.avatar;
+                const id = extractId(a && a[0]);
+                if (id && (e.storage.profiles || {})[id]) {
+                  const o = resolveAvatar(id);
+                  if (o) return o;
+                }
               } catch {}
               return ret;
             }),
@@ -713,10 +776,87 @@
           E.push(
             y.after("getUserAvatarSource", AV2, function (a, ret) {
               try {
-                const usr = a && a[0];
-                const id = usr && (usr.id || usr.userId);
-                const prof = id && (e.storage.profiles || {})[id];
-                if (prof && prof.avatar) return { uri: prof.avatar };
+                const id = extractId(a && a[0]);
+                if (id && (e.storage.profiles || {})[id]) {
+                  const o = resolveAvatar(id);
+                  if (o) return Object.assign({}, ret, { uri: o });
+                }
+              } catch {}
+              return ret;
+            }),
+          );
+      } catch {}
+      try {
+        const GAV = l.findByProps("getGuildMemberAvatarURLSimple");
+        if (GAV && typeof GAV.getGuildMemberAvatarURLSimple === "function")
+          E.push(
+            y.after("getGuildMemberAvatarURLSimple", GAV, function (a, ret) {
+              try {
+                const id = extractId(a && a[0]);
+                if (id && (e.storage.profiles || {})[id]) {
+                  const o = resolveAvatar(id);
+                  if (o) return o;
+                }
+              } catch {}
+              return ret;
+            }),
+          );
+      } catch {}
+      try {
+        const cu = j && j.getCurrentUser && j.getCurrentUser();
+        const proto = cu && cu.constructor && cu.constructor.prototype;
+        if (proto && typeof proto.getAvatarURL === "function")
+          E.push(
+            y.after("getAvatarURL", proto, function (a, ret) {
+              try {
+                const id = this && this.id;
+                if (id && (e.storage.profiles || {})[id]) {
+                  const o = resolveAvatar(id);
+                  if (o) return o;
+                }
+              } catch {}
+              return ret;
+            }),
+          );
+      } catch {}
+      try {
+        if (j && typeof j.getUser === "function")
+          E.push(
+            y.after("getUser", j, function (a, ret) {
+              try {
+                const profs = e.storage.profiles;
+                const id = a && a[0];
+                if (profs && id && profs[id] && ret) {
+                  const nm = resolveName(id);
+                  if (nm) {
+                    const clone = Object.assign(
+                      Object.create(Object.getPrototypeOf(ret)),
+                      ret,
+                    );
+                    clone.username = nm;
+                    clone.globalName = nm;
+                    return clone;
+                  }
+                }
+              } catch {}
+              return ret;
+            }),
+          );
+      } catch {}
+      try {
+        const GMS = l.findByStoreName("GuildMemberStore");
+        if (GMS && typeof GMS.getNick === "function")
+          E.push(
+            y.after("getNick", GMS, function (a, ret) {
+              try {
+                const profs = e.storage.profiles;
+                if (profs && a) {
+                  const id = profs[a[1]] ? a[1] : profs[a[0]] ? a[0] : null;
+                  if (id) {
+                    const nm = resolveName(id);
+                    if (nm) return nm;
+                  }
+                }
               } catch {}
               return ret;
             }),
@@ -872,6 +1012,7 @@
         pid = e.storage.profileId || "",
         pname = e.storage.profileName || "",
         pavatar = e.storage.profileAvatar || "",
+        psource = e.storage.profileSource || "",
         profs = e.storage.profiles || {},
         profKeys = Object.keys(profs),
         t = new Date(),
@@ -1113,7 +1254,7 @@
           { title: "Fake Profiles" },
           n.React.createElement(A, {
             label:
-              "Give a user ID a custom display name and avatar. Fake messages from that ID will use them.",
+              "Override a user ID's display name and avatar across the app (chat, profiles, server member lists). Either set a name/avatar, or mirror another user's profile.",
           }),
           n.React.createElement(f, {
             title: "User ID",
@@ -1139,6 +1280,15 @@
             onChange: function (o) {
               e.storage.profileAvatar = o || "";
             },
+          }),
+          n.React.createElement(f, {
+            title: "Copy From User ID",
+            placeholder: "Mirror this user's name + pfp (optional)",
+            value: psource,
+            onChange: function (o) {
+              e.storage.profileSource = (o || "").replace(/[^0-9]/g, "");
+            },
+            keyboardType: "number-pad",
           }),
           n.React.createElement(A, {
             label: "Save Profile",
@@ -1173,12 +1323,17 @@
             const pr = profs[k] || {};
             return n.React.createElement(A, {
               key: k,
-              label: (pr.name || "(no name)") + "  -  " + k,
-              subLabel: pr.avatar ? "Custom avatar set" : "No avatar set",
+              label: (pr.name || (pr.sourceId ? "(mirror)" : "(no name)")) + "  -  " + k,
+              subLabel: pr.sourceId
+                ? "Mirrors user " + pr.sourceId
+                : pr.avatar
+                  ? "Custom avatar set"
+                  : "Name only",
               onPress: function () {
                 ((e.storage.profileId = k),
                   (e.storage.profileName = pr.name || ""),
-                  (e.storage.profileAvatar = pr.avatar || ""));
+                  (e.storage.profileAvatar = pr.avatar || ""),
+                  (e.storage.profileSource = pr.sourceId || ""));
                 setTick(function (kk) {
                   return kk + 1;
                 });
