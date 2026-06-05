@@ -16,22 +16,31 @@
   function x(r) {
     return ((new Date(r).getTime() - 14200704e5) * 4194304).toString();
   }
+  function mkAuthor(uid) {
+    let u = null;
+    try {
+      u = F.getUser(uid);
+    } catch {}
+    const prof = (e.storage.profiles || {})[uid] || null;
+    const nm = prof && prof.name ? prof.name : null;
+    return {
+      id: uid,
+      username: nm || (u ? u.username : "FakeUser"),
+      global_name: nm || (u ? u.globalName || u.global_name || null : null),
+      discriminator: u ? u.discriminator : "0001",
+      avatar: prof && prof.avatar ? prof.avatar : u ? u.avatar : null,
+      bot: u ? u.bot : !1,
+    };
+  }
   async function P(r, s, c, u, t, ref) {
     const d = t || x(u || new Date().toISOString());
     try {
-      const i = F.getUser(s),
-        g = u || new Date().toISOString(),
+      const g = u || new Date().toISOString(),
         h = {
           id: d,
           type: 0,
           channel_id: r,
-          author: {
-            id: s,
-            username: i ? i.username : "FakeUser",
-            discriminator: i ? i.discriminator : "0001",
-            avatar: i ? i.avatar : null,
-            bot: i ? i.bot : !1,
-          },
+          author: mkAuthor(s),
           content: c,
           mentions: [],
           mention_roles: [],
@@ -51,18 +60,11 @@
           const gid = O?.getChannel?.(r)?.guild_id;
           if (gid) h.message_reference.guild_id = gid;
         } catch {}
-        const ri = F.getUser(ref.userId);
         h.referenced_message = {
           id: ref.id,
           type: 0,
           channel_id: r,
-          author: {
-            id: ref.userId,
-            username: ri ? ri.username : "FakeUser",
-            discriminator: ri ? ri.discriminator : "0001",
-            avatar: ri ? ri.avatar : null,
-            bot: ri ? ri.bot : !1,
-          },
+          author: mkAuthor(ref.userId),
           content: ref.content,
           mentions: [],
           mention_roles: [],
@@ -258,6 +260,7 @@
   }
   function addLinkEmbeds(channelId, message, content) {
     try {
+      if (e.storage.embedsEnabled === !1) return;
       if (!/https?:\/\//i.test("" + (content || ""))) return;
       fetchEmbeds(content)
         .then(function (embeds) {
@@ -429,6 +432,20 @@
   function PanelSheet() {
     const panel = n.React.createElement(J.settings, { inSheet: !0 });
     const RN = n.ReactNative || l.findByProps("ScrollView", "View");
+    const spacer =
+      RN && RN.View
+        ? n.React.createElement(RN.View, { style: { height: 80 } })
+        : null;
+    let ActionSheet = null;
+    try {
+      ActionSheet =
+        (l.findByProps("ActionSheet", "ActionSheetRow") || {}).ActionSheet ||
+        (l.findByProps("ActionSheet") || {}).ActionSheet ||
+        (l.findByProps("ActionSheetRow") || {}).ActionSheet ||
+        null;
+    } catch {}
+    if (ActionSheet)
+      return n.React.createElement(ActionSheet, {}, panel, spacer);
     if (!RN || !RN.ScrollView) return panel;
     let screenH = 800;
     try {
@@ -457,6 +474,7 @@
           nestedScrollEnabled: !0,
         },
         panel,
+        spacer,
       ),
     );
   }
@@ -529,6 +547,44 @@
       );
     } catch {
       tt("Couldn't clear saved messages.");
+    }
+  }
+  function saveProfile() {
+    try {
+      const id = ("" + (e.storage.profileId || "")).trim();
+      if (!/^\d{5,}$/.test(id)) {
+        tt("Enter a valid numeric user ID first.");
+        return;
+      }
+      const name = ("" + (e.storage.profileName || "")).trim();
+      const avatar = ("" + (e.storage.profileAvatar || "")).trim();
+      if (!name && !avatar) {
+        tt("Set a display name and/or an avatar URL.");
+        return;
+      }
+      const p = Object.assign({}, e.storage.profiles || {});
+      p[id] = { name: name || void 0, avatar: avatar || void 0 };
+      e.storage.profiles = p;
+      e.storage._lastUpdate = Date.now();
+      tt("Saved profile for " + id + ".");
+    } catch {
+      tt("Couldn't save that profile.");
+    }
+  }
+  function removeProfile(id) {
+    try {
+      const key = ("" + (id || e.storage.profileId || "")).trim();
+      const p = Object.assign({}, e.storage.profiles || {});
+      if (!p[key]) {
+        tt("No profile saved for that ID.");
+        return;
+      }
+      delete p[key];
+      e.storage.profiles = p;
+      e.storage._lastUpdate = Date.now();
+      tt("Removed profile for " + key + ".");
+    } catch {
+      tt("Couldn't remove that profile.");
     }
   }
   let D = null,
@@ -636,6 +692,36 @@
         )
           return [];
       });
+      try {
+        const AV = l.findByProps("getUserAvatarURL");
+        if (AV && typeof AV.getUserAvatarURL === "function")
+          E.push(
+            y.after("getUserAvatarURL", AV, function (a, ret) {
+              try {
+                const usr = a && a[0];
+                const id = usr && (usr.id || usr.userId);
+                const prof = id && (e.storage.profiles || {})[id];
+                if (prof && prof.avatar) return prof.avatar;
+              } catch {}
+              return ret;
+            }),
+          );
+      } catch {}
+      try {
+        const AV2 = l.findByProps("getUserAvatarSource");
+        if (AV2 && typeof AV2.getUserAvatarSource === "function")
+          E.push(
+            y.after("getUserAvatarSource", AV2, function (a, ret) {
+              try {
+                const usr = a && a[0];
+                const id = usr && (usr.id || usr.userId);
+                const prof = id && (e.storage.profiles || {})[id];
+                if (prof && prof.avatar) return { uri: prof.avatar };
+              } catch {}
+              return ret;
+            }),
+          );
+      } catch {}
       try {
         const s = l.findByProps("openUserContextMenu");
         s?.openUserContextMenu &&
@@ -783,6 +869,11 @@
         s = e.storage.message || "",
         c = r ? F.getUser(r) : null,
         u = (e.storage.savedMessages || []).length,
+        pid = e.storage.profileId || "",
+        pname = e.storage.profileName || "",
+        pavatar = e.storage.profileAvatar || "",
+        profs = e.storage.profiles || {},
+        profKeys = Object.keys(profs),
         t = new Date(),
         d = e.storage.customYear || t.getFullYear(),
         i = e.storage.customMonth || t.getMonth() + 1,
@@ -861,6 +952,17 @@
               e.storage.message = o || "";
             },
             multiline: !0,
+          }),
+          n.React.createElement(A, {
+            label: "Link Previews",
+            subLabel:
+              "Show embeds for links in fake messages (YouTube, websites, images).",
+            trailing: n.React.createElement(v.Forms.FormSwitch, {
+              value: e.storage.embedsEnabled !== !1,
+              onValueChange: function (o) {
+                e.storage.embedsEnabled = o;
+              },
+            }),
           }),
         ),
         n.React.createElement(
@@ -1004,6 +1106,84 @@
             onPress: async function () {
               await runConvo();
             },
+          }),
+        ),
+        n.React.createElement(
+          N,
+          { title: "Fake Profiles" },
+          n.React.createElement(A, {
+            label:
+              "Give a user ID a custom display name and avatar. Fake messages from that ID will use them.",
+          }),
+          n.React.createElement(f, {
+            title: "User ID",
+            placeholder: "User ID to customize",
+            value: pid,
+            onChange: function (o) {
+              e.storage.profileId = (o || "").replace(/[^0-9]/g, "");
+            },
+            keyboardType: "number-pad",
+          }),
+          n.React.createElement(f, {
+            title: "Display Name",
+            placeholder: "Name to show (optional)",
+            value: pname,
+            onChange: function (o) {
+              e.storage.profileName = o || "";
+            },
+          }),
+          n.React.createElement(f, {
+            title: "Avatar URL",
+            placeholder: "https://... image link (optional)",
+            value: pavatar,
+            onChange: function (o) {
+              e.storage.profileAvatar = o || "";
+            },
+          }),
+          n.React.createElement(A, {
+            label: "Save Profile",
+            onPress: function () {
+              saveProfile();
+              setTick(function (kk) {
+                return kk + 1;
+              });
+            },
+          }),
+          n.React.createElement(A, {
+            label: "Remove This Profile",
+            subLabel: "Deletes the profile for the User ID above.",
+            leading: A.Icon
+              ? n.React.createElement(A.Icon, {
+                  source: B.getAssetIDByName("ic_trash_24px"),
+                })
+              : void 0,
+            onPress: function () {
+              removeProfile();
+              setTick(function (kk) {
+                return kk + 1;
+              });
+            },
+          }),
+          profKeys.length
+            ? n.React.createElement(A, {
+                label: "Saved profiles (" + profKeys.length + ") - tap to edit:",
+              })
+            : null,
+          profKeys.map(function (k) {
+            const pr = profs[k] || {};
+            return n.React.createElement(A, {
+              key: k,
+              label: (pr.name || "(no name)") + "  -  " + k,
+              subLabel: pr.avatar ? "Custom avatar set" : "No avatar set",
+              onPress: function () {
+                ((e.storage.profileId = k),
+                  (e.storage.profileName = pr.name || ""),
+                  (e.storage.profileAvatar = pr.avatar || ""));
+                setTick(function (kk) {
+                  return kk + 1;
+                });
+              },
+            });
           }),
         ),
         n.React.createElement(
