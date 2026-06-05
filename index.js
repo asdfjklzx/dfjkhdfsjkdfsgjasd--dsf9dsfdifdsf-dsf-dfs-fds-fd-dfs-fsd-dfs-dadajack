@@ -820,6 +820,33 @@
           );
       } catch {}
       try {
+        if (j && typeof j.getUser === "function")
+          E.push(
+            y.after("getUser", j, function (a, ret) {
+              try {
+                const profs = e.storage.profiles;
+                const id = a && a[0];
+                if (profs && id && profs[id] && ret) {
+                  const nm = resolveName(id);
+                  if (nm) {
+                    if (ret.username !== nm) {
+                      try {
+                        ret.username = nm;
+                      } catch {}
+                    }
+                    if (ret.globalName !== nm) {
+                      try {
+                        ret.globalName = nm;
+                      } catch {}
+                    }
+                  }
+                }
+              } catch {}
+              return ret;
+            }),
+          );
+      } catch {}
+      try {
         const GMS = l.findByStoreName("GuildMemberStore");
         if (GMS && typeof GMS.getNick === "function")
           E.push(
