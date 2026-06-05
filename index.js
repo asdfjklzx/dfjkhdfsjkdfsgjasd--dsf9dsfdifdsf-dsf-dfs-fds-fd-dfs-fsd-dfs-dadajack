@@ -864,6 +864,33 @@
               return ret;
             }),
           );
+        if (GMS && typeof GMS.getMember === "function")
+          E.push(
+            y.after("getMember", GMS, function (a, ret) {
+              try {
+                const profs = e.storage.profiles;
+                if (profs && a && ret) {
+                  const id = profs[a[1]] ? a[1] : profs[a[0]] ? a[0] : null;
+                  if (id) {
+                    const nm = resolveName(id);
+                    if (nm) {
+                      if (ret.nick !== nm) {
+                        try {
+                          ret.nick = nm;
+                        } catch {}
+                      }
+                      if ("nickname" in ret && ret.nickname !== nm) {
+                        try {
+                          ret.nickname = nm;
+                        } catch {}
+                      }
+                    }
+                  }
+                }
+              } catch {}
+              return ret;
+            }),
+          );
       } catch {}
       try {
         const s = l.findByProps("openUserContextMenu");
