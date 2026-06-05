@@ -820,30 +820,6 @@
           );
       } catch {}
       try {
-        if (j && typeof j.getUser === "function")
-          E.push(
-            y.after("getUser", j, function (a, ret) {
-              try {
-                const profs = e.storage.profiles;
-                const id = a && a[0];
-                if (profs && id && profs[id] && ret) {
-                  const nm = resolveName(id);
-                  if (nm) {
-                    const clone = Object.assign(
-                      Object.create(Object.getPrototypeOf(ret)),
-                      ret,
-                    );
-                    clone.username = nm;
-                    clone.globalName = nm;
-                    return clone;
-                  }
-                }
-              } catch {}
-              return ret;
-            }),
-          );
-      } catch {}
-      try {
         const GMS = l.findByStoreName("GuildMemberStore");
         if (GMS && typeof GMS.getNick === "function")
           E.push(
