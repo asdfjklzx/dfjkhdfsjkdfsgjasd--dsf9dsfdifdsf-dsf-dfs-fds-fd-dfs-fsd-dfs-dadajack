@@ -77,6 +77,44 @@
     }
     return prof.avatar || null;
   }
+  function resolveBanner(uid) {
+    const prof = (e.storage.profiles || {})[uid];
+    if (!prof || !prof.sourceId) return null;
+    if (resolving.has("b" + uid)) return null;
+    resolving.add("b" + uid);
+    try {
+      const src = j.getUser(prof.sourceId);
+      if (src && typeof src.getBannerURL === "function") {
+        let u;
+        try {
+          u = src.getBannerURL({ size: 2048 });
+        } catch {}
+        if (!u)
+          try {
+            u = src.getBannerURL();
+          } catch {}
+        if (u) return u;
+      }
+    } catch {
+    } finally {
+      resolving.delete("b" + uid);
+    }
+    return null;
+  }
+  function resolveAccent(uid) {
+    const prof = (e.storage.profiles || {})[uid];
+    if (!prof || !prof.sourceId) return null;
+    if (resolving.has("a" + uid)) return null;
+    resolving.add("a" + uid);
+    try {
+      const src = j.getUser(prof.sourceId);
+      if (src && src.accentColor != null) return src.accentColor;
+    } catch {
+    } finally {
+      resolving.delete("a" + uid);
+    }
+    return null;
+  }
   function mkAuthor(uid) {
     let u = null;
     try {
@@ -882,6 +920,27 @@
                       ret.globalName = dn;
                     } catch {}
                   }
+                  try {
+                    if ("avatarDecorationData" in ret)
+                      ret.avatarDecorationData = null;
+                  } catch {}
+                  try {
+                    if ("avatarDecoration" in ret) ret.avatarDecoration = null;
+                  } catch {}
+                  try {
+                    if ("primaryGuild" in ret) ret.primaryGuild = null;
+                  } catch {}
+                  try {
+                    if ("clan" in ret) ret.clan = null;
+                  } catch {}
+                  if (profs[id].sourceId) {
+                    const ac = resolveAccent(id);
+                    if (ac != null) {
+                      try {
+                        ret.accentColor = ac;
+                      } catch {}
+                    }
+                  }
                 }
               } catch {}
               return ret;
@@ -956,6 +1015,109 @@
           );
       } catch {}
       try {
+        const BU = l.findByProps("getUserBannerURL");
+        if (BU && typeof BU.getUserBannerURL === "function")
+          E.push(
+            y.after("getUserBannerURL", BU, function (a, ret) {
+              try {
+                const id = extractId(a && a[0]);
+                const prof = id && (e.storage.profiles || {})[id];
+                if (prof && prof.sourceId) return resolveBanner(id);
+              } catch {}
+              return ret;
+            }),
+          );
+      } catch {}
+      try {
+        const cu = j && j.getCurrentUser && j.getCurrentUser();
+        const proto = cu && cu.constructor && cu.constructor.prototype;
+        if (proto && typeof proto.getBannerURL === "function")
+          E.push(
+            y.after("getBannerURL", proto, function (a, ret) {
+              try {
+                const id = this && this.id;
+                const prof = id && (e.storage.profiles || {})[id];
+                if (prof && prof.sourceId) return resolveBanner(id);
+              } catch {}
+              return ret;
+            }),
+          );
+      } catch {}
+      try {
+        const DU = l.findByProps("getAvatarDecorationURL");
+        if (DU && typeof DU.getAvatarDecorationURL === "function")
+          E.push(
+            y.after("getAvatarDecorationURL", DU, function (a, ret) {
+              try {
+                const id = extractId(a && a[0]);
+                if (id && (e.storage.profiles || {})[id]) return null;
+              } catch {}
+              return ret;
+            }),
+          );
+      } catch {}
+      try {
+        const cu = j && j.getCurrentUser && j.getCurrentUser();
+        const proto = cu && cu.constructor && cu.constructor.prototype;
+        if (proto && typeof proto.getAvatarDecorationURL === "function")
+          E.push(
+            y.after("getAvatarDecorationURL", proto, function (a, ret) {
+              try {
+                const id = this && this.id;
+                if (id && (e.storage.profiles || {})[id]) return null;
+              } catch {}
+              return ret;
+            }),
+          );
+      } catch {}
+      try {
+        const UPS = l.findByStoreName("UserProfileStore");
+        if (UPS && typeof UPS.getUserProfile === "function")
+          E.push(
+            y.after("getUserProfile", UPS, function (a, ret) {
+              try {
+                const profs = e.storage.profiles;
+                const id = a && a[0];
+                if (profs && id && profs[id] && ret) {
+                  const prof = profs[id];
+                  if (prof.sourceId && !resolving.has("p" + id)) {
+                    resolving.add("p" + id);
+                    try {
+                      const sp = UPS.getUserProfile(prof.sourceId);
+                      if (sp) {
+                        if (sp.bio != null) {
+                          try {
+                            ret.bio = sp.bio;
+                          } catch {}
+                        }
+                        if (sp.pronouns != null) {
+                          try {
+                            ret.pronouns = sp.pronouns;
+                          } catch {}
+                        }
+                        if (sp.accentColor != null) {
+                          try {
+                            ret.accentColor = sp.accentColor;
+                          } catch {}
+                        }
+                        if (sp.themeColors != null) {
+                          try {
+                            ret.themeColors = sp.themeColors;
+                          } catch {}
+                        }
+                      }
+                    } catch {
+                    } finally {
+                      resolving.delete("p" + id);
+                    }
+                  }
+                }
+              } catch {}
+              return ret;
+            }),
+          );
+      } catch {}
+      try {
         if (j && typeof j.getCurrentUser === "function")
           E.push(
             y.after("getCurrentUser", j, function (a, ret) {
@@ -1015,6 +1177,21 @@
         try {
           gms0 = l.findByStoreName("GuildMemberStore");
         } catch {}
+        let ups0 = !1;
+        try {
+          const u0 = l.findByStoreName("UserProfileStore");
+          ups0 = !!(u0 && typeof u0.getUserProfile === "function");
+        } catch {}
+        let protoBan = !1,
+          protoDec = !1;
+        try {
+          const cu1 = j && j.getCurrentUser && j.getCurrentUser();
+          const pr1 = cu1 && cu1.constructor && cu1.constructor.prototype;
+          protoBan = !!(pr1 && typeof pr1.getBannerURL === "function");
+          protoDec = !!(
+            pr1 && typeof pr1.getAvatarDecorationURL === "function"
+          );
+        } catch {}
         patchInfo =
           "avURL:" +
           (hasP("getUserAvatarURL") ? "Y" : "N") +
@@ -1030,6 +1207,16 @@
           (gms0 && typeof gms0.getNick === "function" ? "Y" : "N") +
           " getMember:" +
           (gms0 && typeof gms0.getMember === "function" ? "Y" : "N") +
+          " banURL:" +
+          (hasP("getUserBannerURL") ? "Y" : "N") +
+          " recBan:" +
+          (protoBan ? "Y" : "N") +
+          " decURL:" +
+          (hasP("getAvatarDecorationURL") ? "Y" : "N") +
+          " recDec:" +
+          (protoDec ? "Y" : "N") +
+          " profile:" +
+          (ups0 ? "Y" : "N") +
           " isCurUser:" +
           (hasP("isCurrentUser") ? "Y" : "N") +
           " isMe:" +
