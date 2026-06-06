@@ -94,39 +94,29 @@
       bot: u ? u.bot : !1,
     };
   }
-function spoofCU(real, id) {
-  try {
-    if (_cuProxy && _cuReal === real && _cuId === id) {
-      return _cuProxy;
+  let selfActive = !1,
+    selfId = null,
+    _cuReal = null,
+    _cuId = null,
+    _cuProxy = null;
+  function spoofCU(real, id) {
+    try {
+      if (_cuProxy && _cuReal === real && _cuId === id) return _cuProxy;
+      const desc = Object.getOwnPropertyDescriptors(real);
+      delete desc.id;
+      const clone = Object.create(Object.getPrototypeOf(real), desc);
+      Object.defineProperty(clone, "id", {
+        value: id,
+        writable: !0,
+        enumerable: !0,
+        configurable: !0,
+      });
+      ((_cuReal = real), (_cuId = id), (_cuProxy = clone));
+      return clone;
+    } catch {
+      return real;
     }
-
-    const clone = Object.create(
-      Object.getPrototypeOf(real)
-    );
-
-    const descs = Object.getOwnPropertyDescriptors(real);
-
-    delete descs.id;
-
-    Object.defineProperties(clone, descs);
-
-    Object.defineProperty(clone, "id", {
-      value: id,
-      writable: true,
-      configurable: true,
-      enumerable: true,
-    });
-
-    _cuReal = real;
-    _cuId = id;
-    _cuProxy = clone;
-
-    return clone;
-  } catch (err) {
-    console.error("[LocalMessageSpoofer]", err);
-    return real;
   }
-}
   async function P(r, s, c, u, t, ref) {
     const d = t || x(u || new Date().toISOString());
     try {
@@ -1112,7 +1102,7 @@ function spoofCU(real, id) {
                   ((selfId = fid), (selfActive = !0));
                   setTimeout(function () {
                     ((selfActive = !1), (selfId = null));
-                  }, 4000);
+                  }, 1200);
                 }
               }
             } catch {}
