@@ -945,6 +945,18 @@
               return ret;
             }),
           );
+        const IM = l.findByProps("isMe");
+        if (IM && typeof IM.isMe === "function")
+          E.push(
+            y.after("isMe", IM, function (a, ret) {
+              try {
+                const profs = e.storage.profiles;
+                const id = extractId(a && a[0]) || (a && a[0]);
+                if (profs && id && profs[id] && profs[id].self) return !0;
+              } catch {}
+              return ret;
+            }),
+          );
       } catch {}
       try {
         const hasP = function (fn) {
@@ -985,7 +997,9 @@
           " getMember:" +
           (gms0 && typeof gms0.getMember === "function" ? "Y" : "N") +
           " isCurUser:" +
-          (hasP("isCurrentUser") ? "Y" : "N");
+          (hasP("isCurrentUser") ? "Y" : "N") +
+          " isMe:" +
+          (hasP("isMe") ? "Y" : "N");
       } catch {
         patchInfo = "(diagnostic failed)";
       }
