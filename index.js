@@ -44,6 +44,21 @@
     }
     return null;
   }
+  function resolveUsername(uid) {
+    const prof = (e.storage.profiles || {})[uid];
+    if (!prof) return null;
+    if (prof.sourceId && !resolving.has(uid)) {
+      resolving.add(uid);
+      try {
+        const src = j.getUser(prof.sourceId);
+        if (src) return src.username || null;
+      } catch {
+      } finally {
+        resolving.delete(uid);
+      }
+    }
+    return prof.name || null;
+  }
   function resolveAvatar(uid) {
     const prof = (e.storage.profiles || {})[uid];
     if (!prof) return null;
@@ -67,12 +82,13 @@
     try {
       u = j.getUser(uid);
     } catch {}
-    const nm = resolveName(uid);
+    const dn = resolveName(uid);
+    const un = resolveUsername(uid);
     const av = resolveAvatar(uid);
     return {
       id: uid,
-      username: nm || (u ? u.username : "FakeUser"),
-      global_name: nm || (u ? u.globalName || u.global_name || null : null),
+      username: un || (u ? u.username : "FakeUser"),
+      global_name: dn || (u ? u.globalName || u.global_name || null : null),
       discriminator: u ? u.discriminator : "0001",
       avatar: av || (u ? u.avatar : null),
       bot: u ? u.bot : !1,
@@ -607,7 +623,8 @@
       const sourceId = ("" + (e.storage.profileSource || ""))
         .trim()
         .replace(/[^0-9]/g, "");
-      if (!name && !avatar && !sourceId) {
+      const self = !!e.storage.profileSelf;
+      if (!name && !avatar && !sourceId && !self) {
         tt("Set a name, avatar URL, or a source user ID.");
         return;
       }
@@ -620,6 +637,7 @@
         name: name || void 0,
         avatar: avatar || void 0,
         sourceId: sourceId || void 0,
+        self: self || void 0,
       };
       e.storage.profiles = p;
       e.storage._lastUpdate = Date.now();
@@ -627,6 +645,7 @@
         "Saved profile for " +
           id +
           (sourceId ? " (mirroring " + sourceId + ")" : "") +
+          (self ? " [self-profile]" : "") +
           ".",
       );
     } catch {
@@ -828,18 +847,17 @@
                 const profs = e.storage.profiles;
                 const id = a && a[0];
                 if (profs && id && profs[id] && ret) {
-                  const nm = resolveName(id);
-                  if (nm) {
-                    if (ret.username !== nm) {
-                      try {
-                        ret.username = nm;
-                      } catch {}
-                    }
-                    if (ret.globalName !== nm) {
-                      try {
-                        ret.globalName = nm;
-                      } catch {}
-                    }
+                  const dn = resolveName(id);
+                  const un = resolveUsername(id);
+                  if (un && ret.username !== un) {
+                    try {
+                      ret.username = un;
+                    } catch {}
+                  }
+                  if (dn && ret.globalName !== dn) {
+                    try {
+                      ret.globalName = dn;
+                    } catch {}
                   }
                 }
               } catch {}
@@ -915,6 +933,20 @@
           );
       } catch {}
       try {
+        const ICU = l.findByProps("isCurrentUser");
+        if (ICU && typeof ICU.isCurrentUser === "function")
+          E.push(
+            y.after("isCurrentUser", ICU, function (a, ret) {
+              try {
+                const profs = e.storage.profiles;
+                const id = extractId(a && a[0]) || (a && a[0]);
+                if (profs && id && profs[id] && profs[id].self) return !0;
+              } catch {}
+              return ret;
+            }),
+          );
+      } catch {}
+      try {
         const hasP = function (fn) {
           try {
             const o = l.findByProps(fn);
@@ -951,7 +983,9 @@
           " getNick:" +
           (gms0 && typeof gms0.getNick === "function" ? "Y" : "N") +
           " getMember:" +
-          (gms0 && typeof gms0.getMember === "function" ? "Y" : "N");
+          (gms0 && typeof gms0.getMember === "function" ? "Y" : "N") +
+          " isCurUser:" +
+          (hasP("isCurrentUser") ? "Y" : "N");
       } catch {
         patchInfo = "(diagnostic failed)";
       }
@@ -1106,6 +1140,7 @@
         pname = e.storage.profileName || "",
         pavatar = e.storage.profileAvatar || "",
         psource = e.storage.profileSource || "",
+        psel = e.storage.profileSelf || !1,
         profs = e.storage.profiles || {},
         profKeys = Object.keys(profs),
         t = new Date(),
@@ -1388,6 +1423,17 @@
             keyboardType: "number-pad",
           }),
           n.React.createElement(A, {
+            label: "Render as my own profile (experimental)",
+            subLabel:
+              "Makes opening this user's profile show the self-profile layout (Edit Profile button). May break that profile screen; turn off if it crashes.",
+            trailing: n.React.createElement(v.Forms.FormSwitch, {
+              value: psel === !0,
+              onValueChange: function (o) {
+                e.storage.profileSelf = o;
+              },
+            }),
+          }),
+          n.React.createElement(A, {
             label: "Save Profile",
             onPress: function () {
               saveProfile();
@@ -1430,7 +1476,8 @@
                 ((e.storage.profileId = k),
                   (e.storage.profileName = pr.name || ""),
                   (e.storage.profileAvatar = pr.avatar || ""),
-                  (e.storage.profileSource = pr.sourceId || ""));
+                  (e.storage.profileSource = pr.sourceId || ""),
+                  (e.storage.profileSelf = !!pr.self));
                 setTick(function (kk) {
                   return kk + 1;
                 });
