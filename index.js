@@ -94,6 +94,27 @@
       bot: u ? u.bot : !1,
     };
   }
+  let selfActive = !1,
+    selfId = null,
+    _cuReal = null,
+    _cuId = null,
+    _cuProxy = null;
+  function spoofCU(real, id) {
+    try {
+      if (_cuProxy && _cuReal === real && _cuId === id) return _cuProxy;
+      const proxy = new Proxy(real, {
+        get: function (t, p, r) {
+          if (p === "id") return id;
+          const v = Reflect.get(t, p, r);
+          return typeof v === "function" ? v.bind(t) : v;
+        },
+      });
+      ((_cuReal = real), (_cuId = id), (_cuProxy = proxy));
+      return proxy;
+    } catch {
+      return real;
+    }
+  }
   async function P(r, s, c, u, t, ref) {
     const d = t || x(u || new Date().toISOString());
     try {
@@ -933,6 +954,17 @@
           );
       } catch {}
       try {
+        if (j && typeof j.getCurrentUser === "function")
+          E.push(
+            y.after("getCurrentUser", j, function (a, ret) {
+              try {
+                if (selfActive && selfId && ret) return spoofCU(ret, selfId);
+              } catch {}
+              return ret;
+            }),
+          );
+      } catch {}
+      try {
         const ICU = l.findByProps("isCurrentUser");
         if (ICU && typeof ICU.isCurrentUser === "function")
           E.push(
@@ -1027,6 +1059,51 @@
         }, 1e3),
         E.push(
           y.before("openLazy", _, function ([s, c, u]) {
+            try {
+              const profs = e.storage.profiles;
+              if (profs && u) {
+                let fid = null;
+                const cands = [
+                  u.userId,
+                  u.user && u.user.id,
+                  u.user && u.user.userId,
+                ];
+                for (let ci = 0; ci < cands.length; ci++) {
+                  const cv = cands[ci];
+                  if (cv && profs[cv] && profs[cv].self) {
+                    fid = cv;
+                    break;
+                  }
+                }
+                if (!fid)
+                  try {
+                    for (const key in u) {
+                      const val = u[key];
+                      if (
+                        typeof val === "string" &&
+                        profs[val] &&
+                        profs[val].self
+                      ) {
+                        fid = val;
+                        break;
+                      }
+                      if (val && typeof val === "object") {
+                        const sub = val.id || val.userId;
+                        if (sub && profs[sub] && profs[sub].self) {
+                          fid = sub;
+                          break;
+                        }
+                      }
+                    }
+                  } catch {}
+                if (fid) {
+                  ((selfId = fid), (selfActive = !0));
+                  setTimeout(function () {
+                    ((selfActive = !1), (selfId = null));
+                  }, 4000);
+                }
+              }
+            } catch {}
             const t = u?.message;
             c !== "MessageLongPressActionSheet" ||
               !t ||
