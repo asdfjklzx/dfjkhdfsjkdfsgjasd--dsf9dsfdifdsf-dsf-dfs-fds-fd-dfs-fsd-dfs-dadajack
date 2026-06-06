@@ -653,7 +653,8 @@
     T = null,
     E = [],
     b = null,
-    K = [];
+    K = [],
+    patchInfo = "(not loaded)";
   var J = {
     onLoad() {
       try {
@@ -892,6 +893,68 @@
             }),
           );
       } catch {}
+      try {
+        const NM = l.findByProps("getName");
+        if (NM && typeof NM.getName === "function")
+          E.push(
+            y.after("getName", NM, function (a, ret) {
+              try {
+                const profs = e.storage.profiles;
+                if (profs && a) {
+                  for (let i2 = 0; i2 < a.length; i2++) {
+                    const id = extractId(a[i2]);
+                    if (id && profs[id]) {
+                      const nm = resolveName(id);
+                      if (nm) return nm;
+                    }
+                  }
+                }
+              } catch {}
+              return ret;
+            }),
+          );
+      } catch {}
+      try {
+        const hasP = function (fn) {
+          try {
+            const o = l.findByProps(fn);
+            return !!(o && typeof o[fn] === "function");
+          } catch {
+            return !1;
+          }
+        };
+        let protoHas = !1;
+        try {
+          const cu0 = j && j.getCurrentUser && j.getCurrentUser();
+          protoHas = !!(
+            cu0 &&
+            cu0.constructor &&
+            cu0.constructor.prototype &&
+            typeof cu0.constructor.prototype.getAvatarURL === "function"
+          );
+        } catch {}
+        let gms0 = null;
+        try {
+          gms0 = l.findByStoreName("GuildMemberStore");
+        } catch {}
+        patchInfo =
+          "avURL:" +
+          (hasP("getUserAvatarURL") ? "Y" : "N") +
+          " avSrc:" +
+          (hasP("getUserAvatarSource") ? "Y" : "N") +
+          " guildAv:" +
+          (hasP("getGuildMemberAvatarURLSimple") ? "Y" : "N") +
+          " recAv:" +
+          (protoHas ? "Y" : "N") +
+          " getName:" +
+          (hasP("getName") ? "Y" : "N") +
+          " getNick:" +
+          (gms0 && typeof gms0.getNick === "function" ? "Y" : "N") +
+          " getMember:" +
+          (gms0 && typeof gms0.getMember === "function" ? "Y" : "N");
+      } catch {
+        patchInfo = "(diagnostic failed)";
+      }
       try {
         const s = l.findByProps("openUserContextMenu");
         s?.openUserContextMenu &&
@@ -1285,6 +1348,10 @@
           n.React.createElement(A, {
             label:
               "Override a user ID's display name and avatar across the app (chat, profiles, server member lists). Either set a name/avatar, or mirror another user's profile.",
+          }),
+          n.React.createElement(A, {
+            label: "Patch status (for debugging)",
+            subLabel: patchInfo,
           }),
           n.React.createElement(f, {
             title: "User ID",
