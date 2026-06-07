@@ -916,45 +916,10 @@
           );
       } catch {}
       try {
-        const AGV = l.findByProps("getAvatarURL");
-        if (AGV && typeof AGV.getAvatarURL === "function")
-          E.push(
-            y.after("getAvatarURL", AGV, function (a, ret) {
-              try {
-                const id = firstProfiledId(a);
-                if (id) {
-                  const o = resolveAvatar(id);
-                  if (o) return o;
-                }
-              } catch {}
-              return ret;
-            }),
-          );
-      } catch {}
-      try {
         const AV2 = l.findByProps("getUserAvatarSource");
         if (AV2 && typeof AV2.getUserAvatarSource === "function")
           E.push(
             y.after("getUserAvatarSource", AV2, function (a, ret) {
-              try {
-                const id = firstProfiledId(a);
-                if (id) {
-                  const o = resolveAvatar(id);
-                  if (o)
-                    return ret && typeof ret === "object"
-                      ? Object.assign({}, ret, { uri: o })
-                      : { uri: o };
-                }
-              } catch {}
-              return ret;
-            }),
-          );
-      } catch {}
-      try {
-        const AS3 = l.findByProps("getAvatarSource");
-        if (AS3 && typeof AS3.getAvatarSource === "function")
-          E.push(
-            y.after("getAvatarSource", AS3, function (a, ret) {
               try {
                 const id = firstProfiledId(a);
                 if (id) {
@@ -1320,10 +1285,6 @@
           (hasP("getUserAvatarURL") ? "Y" : "N") +
           " avSrc:" +
           (hasP("getUserAvatarSource") ? "Y" : "N") +
-          " avFn:" +
-          (hasP("getAvatarURL") ? "Y" : "N") +
-          " avSrc2:" +
-          (hasP("getAvatarSource") ? "Y" : "N") +
           " guildAv:" +
           (hasP("getGuildMemberAvatarURLSimple") ? "Y" : "N") +
           " recAv:" +
