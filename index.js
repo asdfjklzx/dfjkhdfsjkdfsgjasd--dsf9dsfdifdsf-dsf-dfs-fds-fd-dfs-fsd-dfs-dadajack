@@ -50,6 +50,15 @@
     }
     forceSet(o, k, null);
   }
+  function firstProfiledId(args) {
+    if (!args) return null;
+    const profs = e.storage.profiles || {};
+    for (let i5 = 0; i5 < args.length; i5++) {
+      const id = extractId(args[i5]);
+      if (id && profs[id]) return id;
+    }
+    return null;
+  }
   function resolveName(uid) {
     const prof = (e.storage.profiles || {})[uid];
     if (!prof) return null;
@@ -896,8 +905,24 @@
           E.push(
             y.after("getUserAvatarURL", AV, function (a, ret) {
               try {
-                const id = extractId(a && a[0]);
-                if (id && (e.storage.profiles || {})[id]) {
+                const id = firstProfiledId(a);
+                if (id) {
+                  const o = resolveAvatar(id);
+                  if (o) return o;
+                }
+              } catch {}
+              return ret;
+            }),
+          );
+      } catch {}
+      try {
+        const AGV = l.findByProps("getAvatarURL");
+        if (AGV && typeof AGV.getAvatarURL === "function")
+          E.push(
+            y.after("getAvatarURL", AGV, function (a, ret) {
+              try {
+                const id = firstProfiledId(a);
+                if (id) {
                   const o = resolveAvatar(id);
                   if (o) return o;
                 }
@@ -912,10 +937,32 @@
           E.push(
             y.after("getUserAvatarSource", AV2, function (a, ret) {
               try {
-                const id = extractId(a && a[0]);
-                if (id && (e.storage.profiles || {})[id]) {
+                const id = firstProfiledId(a);
+                if (id) {
                   const o = resolveAvatar(id);
-                  if (o) return Object.assign({}, ret, { uri: o });
+                  if (o)
+                    return ret && typeof ret === "object"
+                      ? Object.assign({}, ret, { uri: o })
+                      : { uri: o };
+                }
+              } catch {}
+              return ret;
+            }),
+          );
+      } catch {}
+      try {
+        const AS3 = l.findByProps("getAvatarSource");
+        if (AS3 && typeof AS3.getAvatarSource === "function")
+          E.push(
+            y.after("getAvatarSource", AS3, function (a, ret) {
+              try {
+                const id = firstProfiledId(a);
+                if (id) {
+                  const o = resolveAvatar(id);
+                  if (o)
+                    return ret && typeof ret === "object"
+                      ? Object.assign({}, ret, { uri: o })
+                      : { uri: o };
                 }
               } catch {}
               return ret;
@@ -928,8 +975,8 @@
           E.push(
             y.after("getGuildMemberAvatarURLSimple", GAV, function (a, ret) {
               try {
-                const id = extractId(a && a[0]);
-                if (id && (e.storage.profiles || {})[id]) {
+                const id = firstProfiledId(a);
+                if (id) {
                   const o = resolveAvatar(id);
                   if (o) return o;
                 }
@@ -1273,6 +1320,10 @@
           (hasP("getUserAvatarURL") ? "Y" : "N") +
           " avSrc:" +
           (hasP("getUserAvatarSource") ? "Y" : "N") +
+          " avFn:" +
+          (hasP("getAvatarURL") ? "Y" : "N") +
+          " avSrc2:" +
+          (hasP("getAvatarSource") ? "Y" : "N") +
           " guildAv:" +
           (hasP("getGuildMemberAvatarURLSimple") ? "Y" : "N") +
           " recAv:" +
