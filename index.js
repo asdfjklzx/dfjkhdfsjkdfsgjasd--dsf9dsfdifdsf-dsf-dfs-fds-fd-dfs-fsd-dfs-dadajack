@@ -109,6 +109,19 @@
     }
     return prof.avatar || null;
   }
+  const _avSrc = new Map();
+  function mirrorSource(id, ret) {
+    const uri = resolveAvatar(id);
+    if (!uri) return ret;
+    const prev = _avSrc.get(id);
+    if (prev && prev.uri === uri) return prev.obj;
+    const obj =
+      ret && typeof ret === "object"
+        ? Object.assign({}, ret, { uri: uri })
+        : { uri: uri };
+    _avSrc.set(id, { uri: uri, obj: obj });
+    return obj;
+  }
   function resolveBanner(uid) {
     const prof = (e.storage.profiles || {})[uid];
     if (!prof || !prof.sourceId) return null;
@@ -922,13 +935,7 @@
             y.after("getUserAvatarSource", AV2, function (a, ret) {
               try {
                 const id = firstProfiledId(a);
-                if (id) {
-                  const o = resolveAvatar(id);
-                  if (o)
-                    return ret && typeof ret === "object"
-                      ? Object.assign({}, ret, { uri: o })
-                      : { uri: o };
-                }
+                if (id) return mirrorSource(id, ret);
               } catch {}
               return ret;
             }),
