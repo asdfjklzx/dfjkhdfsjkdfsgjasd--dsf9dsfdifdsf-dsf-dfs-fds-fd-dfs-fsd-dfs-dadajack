@@ -179,6 +179,7 @@
   }
   let selfActive = !1,
     selfId = null,
+    selfAt = 0,
     _cuReal = null,
     _cuId = null,
     _cuProxy = null;
@@ -715,6 +716,36 @@
       );
     } catch {
       tt("Couldn't clear saved messages.");
+    }
+  }
+  function removeAllFakes() {
+    try {
+      const list = (e.storage.savedMessages || []).slice();
+      let removed = 0;
+      for (let i6 = 0; i6 < list.length; i6++) {
+        const rec = list[i6];
+        if (rec && rec.id && rec.channelId) {
+          try {
+            n.FluxDispatcher.dispatch({
+              type: "MESSAGE_DELETE",
+              id: rec.id,
+              channelId: rec.channelId,
+              otherPluginBypass: !0,
+            });
+            removed++;
+          } catch {}
+        }
+      }
+      L([]);
+      tt(
+        "Removed " +
+          removed +
+          " spoofed message" +
+          (removed === 1 ? "" : "s") +
+          " and cleared saved.",
+      );
+    } catch {
+      tt("Couldn't remove spoofed messages.");
     }
   }
   let _fp;
@@ -1361,6 +1392,19 @@
         setTimeout(function () {
           return H(r);
         }, 1e3),
+        (function () {
+          try {
+            if (_ && typeof _.hideActionSheet === "function")
+              E.push(
+                y.after("hideActionSheet", _, function () {
+                  try {
+                    if (selfActive && Date.now() - selfAt > 400)
+                      ((selfActive = !1), (selfId = null));
+                  } catch {}
+                }),
+              );
+          } catch {}
+        })(),
         E.push(
           y.before("openLazy", _, function ([s, c, u]) {
             try {
@@ -1401,10 +1445,10 @@
                     }
                   } catch {}
                 if (fid) {
-                  ((selfId = fid), (selfActive = !0));
+                  ((selfId = fid), (selfActive = !0), (selfAt = Date.now()));
                   setTimeout(function () {
                     ((selfActive = !1), (selfId = null));
-                  }, 1200);
+                  }, 8000);
                 }
               }
             } catch {}
@@ -1920,6 +1964,22 @@
               : void 0,
             onPress: function () {
               clearSaved();
+              setTick(function (kk) {
+                return kk + 1;
+              });
+            },
+          }),
+          n.React.createElement(A, {
+            label: "Remove All Spoofed Messages",
+            subLabel:
+              "Deletes every spoofed message from view now and clears the saved list.",
+            leading: A.Icon
+              ? n.React.createElement(A.Icon, {
+                  source: B.getAssetIDByName("ic_trash_24px"),
+                })
+              : void 0,
+            onPress: function () {
+              removeAllFakes();
               setTick(function (kk) {
                 return kk + 1;
               });
