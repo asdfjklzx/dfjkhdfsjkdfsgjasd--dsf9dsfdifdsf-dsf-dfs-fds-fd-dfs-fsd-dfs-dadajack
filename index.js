@@ -27,6 +27,29 @@
     } catch {}
     return null;
   }
+  function forceSet(o, k, v) {
+    if (!o) return;
+    try {
+      o[k] = v;
+    } catch {}
+    try {
+      if (o[k] !== v)
+        Object.defineProperty(o, k, {
+          value: v,
+          writable: !0,
+          configurable: !0,
+          enumerable: !0,
+        });
+    } catch {}
+  }
+  function forceNull(o, k) {
+    try {
+      if (!(k in o)) return;
+    } catch {
+      return;
+    }
+    forceSet(o, k, null);
+  }
   function resolveName(uid) {
     const prof = (e.storage.profiles || {})[uid];
     if (!prof) return null;
@@ -672,6 +695,37 @@
       tt("Couldn't clear saved messages.");
     }
   }
+  let _fp;
+  function fetchProfileSafe(uid) {
+    if (!uid) return;
+    try {
+      if (_fp === undefined) _fp = l.findByProps("fetchProfile") || null;
+    } catch {
+      _fp = null;
+    }
+    if (_fp && typeof _fp.fetchProfile === "function") {
+      try {
+        const r = _fp.fetchProfile(uid);
+        if (r && typeof r.catch === "function") r.catch(function () {});
+      } catch {}
+    }
+  }
+  function prefetchSources() {
+    let n = 0;
+    try {
+      const profs = e.storage.profiles || {};
+      const seen = {};
+      for (const k in profs) {
+        const sid = profs[k] && profs[k].sourceId;
+        if (sid && !seen[sid]) {
+          seen[sid] = 1;
+          fetchProfileSafe(sid);
+          n++;
+        }
+      }
+    } catch {}
+    return n;
+  }
   function saveProfile() {
     try {
       const id = ("" + (e.storage.profileId || "")).trim();
@@ -702,6 +756,7 @@
       };
       e.storage.profiles = p;
       e.storage._lastUpdate = Date.now();
+      if (sourceId) fetchProfileSafe(sourceId);
       tt(
         "Saved profile for " +
           id +
@@ -910,36 +965,16 @@
                 if (profs && id && profs[id] && ret) {
                   const dn = resolveName(id);
                   const un = resolveUsername(id);
-                  if (un && ret.username !== un) {
-                    try {
-                      ret.username = un;
-                    } catch {}
-                  }
-                  if (dn && ret.globalName !== dn) {
-                    try {
-                      ret.globalName = dn;
-                    } catch {}
-                  }
-                  try {
-                    if ("avatarDecorationData" in ret)
-                      ret.avatarDecorationData = null;
-                  } catch {}
-                  try {
-                    if ("avatarDecoration" in ret) ret.avatarDecoration = null;
-                  } catch {}
-                  try {
-                    if ("primaryGuild" in ret) ret.primaryGuild = null;
-                  } catch {}
-                  try {
-                    if ("clan" in ret) ret.clan = null;
-                  } catch {}
+                  if (un && ret.username !== un) forceSet(ret, "username", un);
+                  if (dn && ret.globalName !== dn)
+                    forceSet(ret, "globalName", dn);
+                  forceNull(ret, "avatarDecorationData");
+                  forceNull(ret, "avatarDecoration");
+                  forceNull(ret, "primaryGuild");
+                  forceNull(ret, "clan");
                   if (profs[id].sourceId) {
                     const ac = resolveAccent(id);
-                    if (ac != null) {
-                      try {
-                        ret.accentColor = ac;
-                      } catch {}
-                    }
+                    if (ac != null) forceSet(ret, "accentColor", ac);
                   }
                 }
               } catch {}
@@ -1080,31 +1115,23 @@
                 const id = a && a[0];
                 if (profs && id && profs[id] && ret) {
                   const prof = profs[id];
+                  forceNull(ret, "avatarDecoration");
+                  forceNull(ret, "avatarDecorationData");
+                  forceNull(ret, "profileEffectId");
+                  forceNull(ret, "primaryGuild");
+                  forceNull(ret, "clan");
                   if (prof.sourceId && !resolving.has("p" + id)) {
                     resolving.add("p" + id);
                     try {
                       const sp = UPS.getUserProfile(prof.sourceId);
                       if (sp) {
-                        if (sp.bio != null) {
-                          try {
-                            ret.bio = sp.bio;
-                          } catch {}
-                        }
-                        if (sp.pronouns != null) {
-                          try {
-                            ret.pronouns = sp.pronouns;
-                          } catch {}
-                        }
-                        if (sp.accentColor != null) {
-                          try {
-                            ret.accentColor = sp.accentColor;
-                          } catch {}
-                        }
-                        if (sp.themeColors != null) {
-                          try {
-                            ret.themeColors = sp.themeColors;
-                          } catch {}
-                        }
+                        if (sp.bio != null) forceSet(ret, "bio", sp.bio);
+                        if (sp.pronouns != null)
+                          forceSet(ret, "pronouns", sp.pronouns);
+                        if (sp.accentColor != null)
+                          forceSet(ret, "accentColor", sp.accentColor);
+                        if (sp.themeColors != null)
+                          forceSet(ret, "themeColors", sp.themeColors);
                       }
                     } catch {
                     } finally {
@@ -1217,6 +1244,15 @@
           (protoDec ? "Y" : "N") +
           " profile:" +
           (ups0 ? "Y" : "N") +
+          " fetchP:" +
+          (function () {
+            try {
+              const f0 = l.findByProps("fetchProfile");
+              return f0 && typeof f0.fetchProfile === "function" ? "Y" : "N";
+            } catch {
+              return "N";
+            }
+          })() +
           " isCurUser:" +
           (hasP("isCurrentUser") ? "Y" : "N") +
           " isMe:" +
@@ -1387,6 +1423,9 @@
             S && (S = !1);
           }),
         ));
+      try {
+        prefetchSources();
+      } catch {}
     },
     onUnload() {
       try {
@@ -1720,6 +1759,28 @@
               setTick(function (kk) {
                 return kk + 1;
               });
+            },
+          }),
+          n.React.createElement(A, {
+            label: "Cache my profile now (for banner/bio)",
+            subLabel:
+              "Fetches every source profile so banner, bio, pronouns and accent are available to copy.",
+            leading: A.Icon
+              ? n.React.createElement(A.Icon, {
+                  source: B.getAssetIDByName("ic_download_24px"),
+                })
+              : void 0,
+            onPress: function () {
+              try {
+                const c = prefetchSources();
+                tt(
+                  c
+                    ? "Fetching " + c + " source profile(s). Reopen the target in a moment."
+                    : "No mirror sources set. Add a Copy From User ID first.",
+                );
+              } catch {
+                tt("Couldn't trigger a profile fetch on this build.");
+              }
             },
           }),
           n.React.createElement(A, {
