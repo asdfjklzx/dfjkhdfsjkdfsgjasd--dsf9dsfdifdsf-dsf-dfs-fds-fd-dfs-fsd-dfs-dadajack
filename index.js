@@ -59,6 +59,13 @@
     }
     return null;
   }
+  function createdAtFromId(id) {
+    try {
+      const ms = Math.floor(Number(id) / 4194304) + 1420070400000;
+      if (isFinite(ms)) return new Date(ms);
+    } catch {}
+    return null;
+  }
   function resolveName(uid) {
     const prof = (e.storage.profiles || {})[uid];
     if (!prof) return null;
@@ -1022,9 +1029,14 @@
                   forceNull(ret, "avatarDecoration");
                   forceNull(ret, "primaryGuild");
                   forceNull(ret, "clan");
+                  forceSet(ret, "premiumType", 0);
+                  forceNull(ret, "premiumSince");
+                  forceNull(ret, "premiumGuildSince");
                   if (profs[id].sourceId) {
                     const ac = resolveAccent(id);
                     if (ac != null) forceSet(ret, "accentColor", ac);
+                    const ca = createdAtFromId(profs[id].sourceId);
+                    if (ca) forceSet(ret, "createdAt", ca);
                   }
                 }
               } catch {}
@@ -1219,6 +1231,10 @@
                   forceNull(ret, "profileEffectId");
                   forceNull(ret, "primaryGuild");
                   forceNull(ret, "clan");
+                  forceSet(ret, "badges", []);
+                  forceSet(ret, "premiumType", 0);
+                  forceNull(ret, "premiumSince");
+                  forceNull(ret, "premiumGuildSince");
                   if (prof.sourceId && !resolving.has("p" + id)) {
                     resolving.add("p" + id);
                     try {
@@ -1238,6 +1254,32 @@
                     }
                   }
                 }
+              } catch {}
+              return ret;
+            }),
+          );
+      } catch {}
+      try {
+        const BG = l.findByProps("getBadges");
+        if (BG && typeof BG.getBadges === "function")
+          E.push(
+            y.after("getBadges", BG, function (a, ret) {
+              try {
+                const id = firstProfiledId(a);
+                if (id) return [];
+              } catch {}
+              return ret;
+            }),
+          );
+      } catch {}
+      try {
+        const BG2 = l.findByProps("getUserProfileBadges");
+        if (BG2 && typeof BG2.getUserProfileBadges === "function")
+          E.push(
+            y.after("getUserProfileBadges", BG2, function (a, ret) {
+              try {
+                const id = firstProfiledId(a);
+                if (id) return [];
               } catch {}
               return ret;
             }),
