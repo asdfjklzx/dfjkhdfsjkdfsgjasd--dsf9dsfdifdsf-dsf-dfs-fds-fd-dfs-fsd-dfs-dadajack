@@ -1027,6 +1027,55 @@
               return ret;
             }),
           );
+        if (GMS && typeof GMS.getMembers === "function")
+          E.push(
+            y.after("getMembers", GMS, function (a, ret) {
+              try {
+                const profs = e.storage.profiles;
+                if (profs && ret) {
+                  const arr = Array.isArray(ret)
+                    ? ret
+                    : ret && typeof ret === "object"
+                      ? Object.values(ret)
+                      : null;
+                  if (arr)
+                    for (let i3 = 0; i3 < arr.length; i3++) {
+                      const m = arr[i3];
+                      const mid = m && (m.userId || (m.user && m.user.id));
+                      if (mid && profs[mid]) {
+                        const nm = resolveName(mid);
+                        if (nm) {
+                          forceSet(m, "nick", nm);
+                          if ("nickname" in m) forceSet(m, "nickname", nm);
+                        }
+                      }
+                    }
+                }
+              } catch {}
+              return ret;
+            }),
+          );
+      } catch {}
+      try {
+        const NK = l.findByProps("getNickname");
+        if (NK && typeof NK.getNickname === "function")
+          E.push(
+            y.after("getNickname", NK, function (a, ret) {
+              try {
+                const profs = e.storage.profiles;
+                if (profs && a) {
+                  for (let i4 = 0; i4 < a.length; i4++) {
+                    const id = extractId(a[i4]);
+                    if (id && profs[id]) {
+                      const nm = resolveName(id);
+                      if (nm) return nm;
+                    }
+                  }
+                }
+              } catch {}
+              return ret;
+            }),
+          );
       } catch {}
       try {
         const NM = l.findByProps("getName");
@@ -1234,6 +1283,17 @@
           (gms0 && typeof gms0.getNick === "function" ? "Y" : "N") +
           " getMember:" +
           (gms0 && typeof gms0.getMember === "function" ? "Y" : "N") +
+          " getMembers:" +
+          (gms0 && typeof gms0.getMembers === "function" ? "Y" : "N") +
+          " getNickname:" +
+          (function () {
+            try {
+              const k0 = l.findByProps("getNickname");
+              return k0 && typeof k0.getNickname === "function" ? "Y" : "N";
+            } catch {
+              return "N";
+            }
+          })() +
           " banURL:" +
           (hasP("getUserBannerURL") ? "Y" : "N") +
           " recBan:" +
