@@ -66,6 +66,16 @@
     } catch {}
     return null;
   }
+  function resolveJoined(uid) {
+    const prof = (e.storage.profiles || {})[uid];
+    if (!prof) return null;
+    if (prof.joinedAt) return prof.joinedAt;
+    if (prof.sourceId) {
+      const d = createdAtFromId(prof.sourceId);
+      if (d) return d.toISOString();
+    }
+    return null;
+  }
   function resolveName(uid) {
     const prof = (e.storage.profiles || {})[uid];
     if (!prof) return null;
@@ -807,12 +817,23 @@
         tt("Source ID must differ from the user ID.");
         return;
       }
+      let joinedAt = void 0;
+      const joinedRaw = ("" + (e.storage.profileJoined || "")).trim();
+      if (joinedRaw) {
+        const jd = new Date(joinedRaw);
+        if (!isNaN(jd.getTime())) joinedAt = jd.toISOString();
+        else {
+          tt('Couldn\'t read that member date. Try "2024-12-14".');
+          return;
+        }
+      }
       const p = Object.assign({}, e.storage.profiles || {});
       p[id] = {
         name: name || void 0,
         avatar: avatar || void 0,
         sourceId: sourceId || void 0,
         self: self || void 0,
+        joinedAt: joinedAt,
       };
       e.storage.profiles = p;
       e.storage._lastUpdate = Date.now();
@@ -1083,6 +1104,16 @@
                         } catch {}
                       }
                     }
+                    const ja = resolveJoined(id);
+                    if (ja) {
+                      forceSet(ret, "joinedAt", ja);
+                      if ("joinedAtTimestamp" in ret)
+                        forceSet(
+                          ret,
+                          "joinedAtTimestamp",
+                          new Date(ja).getTime(),
+                        );
+                    }
                   }
                 }
               } catch {}
@@ -1109,6 +1140,16 @@
                         if (nm) {
                           forceSet(m, "nick", nm);
                           if ("nickname" in m) forceSet(m, "nickname", nm);
+                        }
+                        const ja = resolveJoined(mid);
+                        if (ja) {
+                          forceSet(m, "joinedAt", ja);
+                          if ("joinedAtTimestamp" in m)
+                            forceSet(
+                              m,
+                              "joinedAtTimestamp",
+                              new Date(ja).getTime(),
+                            );
                         }
                       }
                     }
@@ -1624,6 +1665,7 @@
         pname = e.storage.profileName || "",
         pavatar = e.storage.profileAvatar || "",
         psource = e.storage.profileSource || "",
+        pjoined = e.storage.profileJoined || "",
         psel = e.storage.profileSelf || !1,
         profs = e.storage.profiles || {},
         profKeys = Object.keys(profs),
@@ -1906,6 +1948,14 @@
             },
             keyboardType: "number-pad",
           }),
+          n.React.createElement(f, {
+            title: "Server Member Since date (optional)",
+            placeholder: 'e.g. 2024-12-14  (blank = your account date)',
+            value: pjoined,
+            onChange: function (o) {
+              e.storage.profileJoined = o || "";
+            },
+          }),
           n.React.createElement(A, {
             label: "Render as my own profile (experimental)",
             subLabel:
@@ -1983,6 +2033,9 @@
                   (e.storage.profileName = pr.name || ""),
                   (e.storage.profileAvatar = pr.avatar || ""),
                   (e.storage.profileSource = pr.sourceId || ""),
+                  (e.storage.profileJoined = pr.joinedAt
+                    ? new Date(pr.joinedAt).toISOString().slice(0, 10)
+                    : ""),
                   (e.storage.profileSelf = !!pr.self));
                 setTick(function (kk) {
                   return kk + 1;
