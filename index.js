@@ -907,33 +907,21 @@
         .trim()
         .replace(/[^0-9]/g, "");
       const self = !!e.storage.profileSelf;
-      if (!name && !avatar && !sourceId && !self) {
-        tt("Set a name, avatar URL, or a source user ID.");
-        return;
-      }
       if (sourceId && sourceId === id) {
         tt("Source ID must differ from the user ID.");
         return;
       }
-      let joinedAt = void 0;
+      let joinedAt = void 0,
+        dateWarn = "";
       const joinedRaw = ("" + (e.storage.profileJoined || "")).trim();
       if (joinedRaw) {
         const jd = parseUserDate(joinedRaw);
         if (jd) joinedAt = jd.toISOString();
-        else {
-          tt('Couldn\'t read that member date. Try "12/14/2024".');
-          return;
-        }
+        else dateWarn += " (server date not understood, left default)";
       }
-      let accountDate = void 0;
-      const accountRaw = ("" + (e.storage.profileAccount || "")).trim();
-      if (accountRaw) {
-        const ad = parseUserDate(accountRaw);
-        if (ad) accountDate = ad.toISOString();
-        else {
-          tt('Couldn\'t read that Discord date. Try "12/14/2024".');
-          return;
-        }
+      if (!name && !avatar && !sourceId && !self && !joinedAt) {
+        tt("Set a name, avatar, source ID, or a date first.");
+        return;
       }
       const p = Object.assign({}, e.storage.profiles || {});
       p[id] = {
@@ -942,7 +930,7 @@
         sourceId: sourceId || void 0,
         self: self || void 0,
         joinedAt: joinedAt,
-        accountDate: accountDate,
+        accountDate: void 0,
       };
       e.storage.profiles = p;
       e.storage._lastUpdate = Date.now();
@@ -956,7 +944,8 @@
           id +
           (sourceId ? " (mirroring " + sourceId + ")" : "") +
           (self ? " [self-profile]" : "") +
-          ".",
+          "." +
+          dateWarn,
       );
     } catch {
       tt("Couldn't save that profile.");
@@ -1776,99 +1765,6 @@
       try {
         if (NV && NV.useNavigation) nav = NV.useNavigation();
       } catch {}
-      const TO =
-        (n.ReactNative && (n.ReactNative.TouchableOpacity || n.ReactNative.Pressable)) ||
-        null;
-      const TX = n.ReactNative && n.ReactNative.Text;
-      const bumpTick = function () {
-        setTick(function (kk) {
-          return kk + 1;
-        });
-      };
-      const stepDate = function (key, unit, delta) {
-        let base = parseUserDate(e.storage[key] || "");
-        if (!base)
-          base = createdAtFromId(e.storage.profileSource || "") || new Date();
-        const d = new Date(base.getTime());
-        if (unit === "y") d.setFullYear(d.getFullYear() + delta);
-        else if (unit === "m") d.setMonth(d.getMonth() + delta);
-        else d.setDate(d.getDate() + delta);
-        e.storage[key] = fmtSimple(d.toISOString());
-        bumpTick();
-      };
-      const chip = function (txt, fn) {
-        return n.React.createElement(
-          TO,
-          {
-            onPress: fn,
-            style: {
-              paddingVertical: 7,
-              paddingHorizontal: 11,
-              backgroundColor: "rgba(127,127,160,0.18)",
-              borderRadius: 8,
-              marginRight: 6,
-              marginTop: 6,
-            },
-          },
-          n.React.createElement(
-            TX,
-            { style: { color: "#dfe1f0", fontWeight: "600", fontSize: 13 } },
-            txt,
-          ),
-        );
-      };
-      const stepperRow = function (key, withMatch) {
-        if (!TO || !TX) return null;
-        const eff = parseUserDate(e.storage[key] || "");
-        const kids = [
-          chip("\u2212Y", function () {
-            stepDate(key, "y", -1);
-          }),
-          chip("\u2212M", function () {
-            stepDate(key, "m", -1);
-          }),
-          chip("\u2212D", function () {
-            stepDate(key, "d", -1);
-          }),
-          chip("+D", function () {
-            stepDate(key, "d", 1);
-          }),
-          chip("+M", function () {
-            stepDate(key, "m", 1);
-          }),
-          chip("+Y", function () {
-            stepDate(key, "y", 1);
-          }),
-          chip("Today", function () {
-            ((e.storage[key] = fmtSimple(new Date().toISOString())), bumpTick());
-          }),
-        ];
-        if (withMatch)
-          kids.push(
-            chip("Match my account", function () {
-              const d = createdAtFromId(e.storage.profileSource || "");
-              ((e.storage[key] = d ? fmtSimple(d.toISOString()) : ""),
-                bumpTick());
-            }),
-          );
-        kids.push(
-          chip("Clear", function () {
-            ((e.storage[key] = ""), bumpTick());
-          }),
-        );
-        return n.React.createElement(
-          n.ReactNative.View,
-          {
-            style: {
-              flexDirection: "row",
-              flexWrap: "wrap",
-              paddingHorizontal: 12,
-              paddingBottom: 10,
-            },
-          },
-          kids,
-        );
-      };
       const r = e.storage.userId || "",
         s = e.storage.message || "",
         c = r ? F.getUser(r) : null,
@@ -1878,7 +1774,6 @@
         pavatar = e.storage.profileAvatar || "",
         psource = e.storage.profileSource || "",
         pjoined = e.storage.profileJoined || "",
-        paccount = e.storage.profileAccount || "",
         psel = e.storage.profileSelf || !1,
         profs = e.storage.profiles || {},
         profKeys = Object.keys(profs),
@@ -2193,16 +2088,6 @@
               e.storage.profileJoined = o || "";
             },
           }),
-          stepperRow("profileJoined", !0),
-          n.React.createElement(f, {
-            title: "Discord Member Since date (optional)",
-            placeholder: 'MM/DD/YYYY  (blank = your account date)',
-            value: paccount,
-            onChange: function (o) {
-              e.storage.profileAccount = o || "";
-            },
-          }),
-          stepperRow("profileAccount", !1),
           n.React.createElement(A, {
             label: "Render as my own profile (experimental)",
             subLabel:
@@ -2282,9 +2167,6 @@
                   (e.storage.profileSource = pr.sourceId || ""),
                   (e.storage.profileJoined = pr.joinedAt
                     ? fmtSimple(pr.joinedAt)
-                    : ""),
-                  (e.storage.profileAccount = pr.accountDate
-                    ? fmtSimple(pr.accountDate)
                     : ""),
                   (e.storage.profileSelf = !!pr.self));
                 setTick(function (kk) {
