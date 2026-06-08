@@ -16,6 +16,44 @@
   function x(r) {
     return ((new Date(r).getTime() - 14200704e5) * 4194304).toString();
   }
+  function lastSundayDate(year, month1) {
+    const last = new Date(Date.UTC(year, month1, 0));
+    return last.getUTCDate() - last.getUTCDay();
+  }
+  function ukIsBSTInstant(t) {
+    const y = t.getUTCFullYear();
+    const start = Date.UTC(y, 2, lastSundayDate(y, 3), 1, 0, 0);
+    const end = Date.UTC(y, 9, lastSundayDate(y, 10), 1, 0, 0);
+    const ms = t.getTime();
+    return ms >= start && ms < end;
+  }
+  function ukNowDate() {
+    const now = new Date();
+    const off = ukIsBSTInstant(now) ? 60 : 0;
+    const s = new Date(now.getTime() + off * 60000);
+    return new Date(
+      s.getUTCFullYear(),
+      s.getUTCMonth(),
+      s.getUTCDate(),
+      s.getUTCHours(),
+      s.getUTCMinutes(),
+      s.getUTCSeconds(),
+      s.getUTCMilliseconds(),
+    );
+  }
+  function ukOn() {
+    try {
+      return e.storage.ukTime !== !1;
+    } catch {
+      return !0;
+    }
+  }
+  function nowDate() {
+    return ukOn() ? ukNowDate() : new Date();
+  }
+  function nowISO() {
+    return nowDate().toISOString();
+  }
   const resolving = new Set();
   function extractId(x) {
     try {
@@ -279,9 +317,9 @@
     }
   }
   async function P(r, s, c, u, t, ref) {
-    const d = t || x(u || new Date().toISOString());
+    const d = t || x(u || nowISO());
     try {
-      const g = u || new Date().toISOString(),
+      const g = u || nowISO(),
         h = {
           id: d,
           type: 0,
@@ -611,15 +649,15 @@
     }
     const text = e.storage.conversationText || "",
       lines = text.split(/\r?\n/),
-      useUTC = e.storage.useUTC || !1,
-      now = new Date(),
+      useUTC = ukOn() ? !1 : e.storage.useUTC || !1,
+      now = nowDate(),
       base = {
         y: e.storage.customYear || now.getFullYear(),
         mo: e.storage.customMonth || now.getMonth() + 1,
         d: e.storage.customDay || now.getDate(),
       };
     let count = 0,
-      fallback = Date.now() - lines.length * 6e4;
+      fallback = nowDate().getTime() - lines.length * 6e4;
     const built = [];
     for (const line of lines) {
       const parsed = parseLine(line);
@@ -1844,7 +1882,7 @@
         psel = e.storage.profileSelf || !1,
         profs = e.storage.profiles || {},
         profKeys = Object.keys(profs),
-        t = new Date(),
+        t = nowDate(),
         d = e.storage.customYear || t.getFullYear(),
         i = e.storage.customMonth || t.getMonth() + 1,
         g = e.storage.customDay || t.getDate(),
@@ -1939,14 +1977,38 @@
           N,
           { title: "Custom Timestamp" },
           n.React.createElement(A, {
-            label: e.storage.useUTC ? "Using UTC Time" : "Using Local Time",
-            subLabel: e.storage.useUTC
-              ? "Time will be the same for everyone"
-              : "Time will adjust to viewer's timezone",
+            label:
+              "UK time (GMT/BST)" + (ukOn() ? " - ON" : " - off"),
+            subLabel:
+              "Automatic timestamps use UK time, and times you enter are treated as UK. Handles BST/GMT automatically.",
+            trailing: n.React.createElement(v.Forms.FormSwitch, {
+              value: ukOn(),
+              onValueChange: function (o) {
+                e.storage.ukTime = o;
+                setTick(function (kk) {
+                  return kk + 1;
+                });
+              },
+            }),
+          }),
+          n.React.createElement(A, {
+            label: ukOn()
+              ? "UTC mode (ignored while UK is on)"
+              : e.storage.useUTC
+                ? "Using UTC Time"
+                : "Using Local Time",
+            subLabel: ukOn()
+              ? "Turn off UK time above to use this."
+              : e.storage.useUTC
+                ? "Time will be the same for everyone"
+                : "Time will adjust to viewer's timezone",
             trailing: n.React.createElement(v.Forms.FormSwitch, {
               value: e.storage.useUTC || !1,
               onValueChange: function (o) {
                 e.storage.useUTC = o;
+                setTick(function (kk) {
+                  return kk + 1;
+                });
               },
             }),
           }),
@@ -2019,7 +2081,7 @@
                 (e.storage.userId || "").trim() || F.getCurrentUser()?.id;
               if (!p) return;
               const C = (
-                  e.storage.useUTC
+                  e.storage.useUTC && !ukOn()
                     ? new Date(
                         Date.UTC(
                           e.storage.customYear || t.getFullYear(),
