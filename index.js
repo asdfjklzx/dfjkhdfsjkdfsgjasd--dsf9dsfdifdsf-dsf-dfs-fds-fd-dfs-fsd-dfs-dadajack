@@ -11,6 +11,7 @@
     R = l.findByProps("sendMessage", "startEditMessage", "editMessage"),
     W = l.findByProps("showToast"),
     NV = l.findByProps("useNavigation"),
+    Q = l.findByStoreName("GuildStore"),
     I = new Map();
   let S = !1;
   function x(r) {
@@ -88,9 +89,17 @@
     }
     forceSet(o, k, null);
   }
+  const EMPTY = {};
+  function anyProf() {
+    const p = e.storage.profiles;
+    if (!p) return !1;
+    for (const k in p) return !0;
+    return !1;
+  }
   function firstProfiledId(args) {
     if (!args) return null;
-    const profs = e.storage.profiles || {};
+    if (!anyProf()) return null;
+    const profs = e.storage.profiles || EMPTY;
     for (let i5 = 0; i5 < args.length; i5++) {
       const id = extractId(args[i5]);
       if (id && profs[id]) return id;
@@ -107,32 +116,48 @@
   function parseUserDate(str) {
     str = ("" + str).trim();
     if (!str) return null;
-    let d = new Date(str);
-    if (!isNaN(d.getTime())) return d;
-    const m = str.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/);
+    let m = str.match(/^(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})$/);
+    if (m) {
+      const yr = +m[1],
+        mo = +m[2],
+        dy = +m[3];
+      const d = new Date(yr, mo - 1, dy);
+      if (!isNaN(d.getTime()) && d.getMonth() === mo - 1 && d.getDate() === dy)
+        return d;
+      return null;
+    }
+    m = str.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/);
     if (m) {
       let a = +m[1],
         b = +m[2],
         y = +m[3];
       if (y < 100) y += 2000;
-      if (a > 12 && b >= 1 && b <= 12) {
-        d = new Date(y, b - 1, a);
-        if (!isNaN(d.getTime())) return d;
+      let dy = a,
+        mo = b;
+      if (mo > 12 && dy <= 12) {
+        dy = b;
+        mo = a;
       }
+      const d = new Date(y, mo - 1, dy);
+      if (!isNaN(d.getTime()) && d.getMonth() === mo - 1 && d.getDate() === dy)
+        return d;
+      return null;
     }
+    const d2 = new Date(str);
+    if (!isNaN(d2.getTime())) return d2;
     return null;
   }
   function fmtSimple(iso) {
     try {
       const d = new Date(iso);
       if (isNaN(d.getTime())) return "";
-      return d.getMonth() + 1 + "/" + d.getDate() + "/" + d.getFullYear();
+      return d.getDate() + "/" + (d.getMonth() + 1) + "/" + d.getFullYear();
     } catch {
       return "";
     }
   }
   function resolveJoined(uid) {
-    const prof = (e.storage.profiles || {})[uid];
+    const prof = (e.storage.profiles || EMPTY)[uid];
     if (!prof) return null;
     if (prof.joinedAt) return prof.joinedAt;
     if (prof.sourceId) {
@@ -142,7 +167,7 @@
     return null;
   }
   function resolveCreated(uid) {
-    const prof = (e.storage.profiles || {})[uid];
+    const prof = (e.storage.profiles || EMPTY)[uid];
     if (!prof) return null;
     if (prof.accountDate) {
       const d = new Date(prof.accountDate);
@@ -152,7 +177,7 @@
     return null;
   }
   function resolveName(uid) {
-    const prof = (e.storage.profiles || {})[uid];
+    const prof = (e.storage.profiles || EMPTY)[uid];
     if (!prof) return null;
     if (prof.name) return prof.name;
     if (prof.sourceId && !resolving.has(uid)) {
@@ -169,7 +194,7 @@
     return null;
   }
   function resolveUsername(uid) {
-    const prof = (e.storage.profiles || {})[uid];
+    const prof = (e.storage.profiles || EMPTY)[uid];
     if (!prof) return null;
     if (prof.sourceId && !resolving.has(uid)) {
       resolving.add(uid);
@@ -184,7 +209,7 @@
     return prof.name || null;
   }
   function resolveAvatar(uid) {
-    const prof = (e.storage.profiles || {})[uid];
+    const prof = (e.storage.profiles || EMPTY)[uid];
     if (!prof) return null;
     if (prof.sourceId && !resolving.has(uid)) {
       resolving.add(uid);
@@ -215,7 +240,7 @@
     return obj;
   }
   function resolveBanner(uid) {
-    const prof = (e.storage.profiles || {})[uid];
+    const prof = (e.storage.profiles || EMPTY)[uid];
     if (!prof || !prof.sourceId) return null;
     if (resolving.has("b" + uid)) return null;
     resolving.add("b" + uid);
@@ -258,7 +283,7 @@
     return null;
   }
   function resolveAccent(uid) {
-    const prof = (e.storage.profiles || {})[uid];
+    const prof = (e.storage.profiles || EMPTY)[uid];
     if (!prof || !prof.sourceId) return null;
     if (resolving.has("a" + uid)) return null;
     resolving.add("a" + uid);
@@ -316,7 +341,33 @@
       return real;
     }
   }
+  function resolveServerName(inlineId, channelId) {
+    try {
+      let id = inlineId;
+      if (!id) id = ("" + (e.storage.serverTagId || "")).trim();
+      if (!id) {
+        const ch = O && O.getChannel && O.getChannel(channelId);
+        id = ch && ch.guild_id;
+      }
+      if (id && Q && Q.getGuild) {
+        const g = Q.getGuild(id);
+        if (g && g.name) return g.name;
+      }
+    } catch {}
+    return null;
+  }
+  function applyTags(content, channelId) {
+    if (!content || content.indexOf("[server") === -1) return content;
+    let out = content.replace(/\[server:(\d{5,25})\]/gi, function (m, id) {
+      return resolveServerName(id, channelId) || m;
+    });
+    out = out.replace(/\[server\]/gi, function (m) {
+      return resolveServerName(null, channelId) || m;
+    });
+    return out;
+  }
   async function P(r, s, c, u, t, ref) {
+    c = applyTags(c, r);
     const d = t || x(u || nowISO());
     try {
       const g = u || nowISO(),
@@ -912,6 +963,7 @@
         return;
       }
       let joinedAt = void 0,
+        accountDate = void 0,
         dateWarn = "";
       const joinedRaw = ("" + (e.storage.profileJoined || "")).trim();
       if (joinedRaw) {
@@ -919,7 +971,13 @@
         if (jd) joinedAt = jd.toISOString();
         else dateWarn += " (server date not understood, left default)";
       }
-      if (!name && !avatar && !sourceId && !self && !joinedAt) {
+      const accountRaw = ("" + (e.storage.profileAccount || "")).trim();
+      if (accountRaw) {
+        const ad = parseUserDate(accountRaw);
+        if (ad) accountDate = ad.toISOString();
+        else dateWarn += " (Discord date not understood, left default)";
+      }
+      if (!name && !avatar && !sourceId && !self && !joinedAt && !accountDate) {
         tt("Set a name, avatar, source ID, or a date first.");
         return;
       }
@@ -930,7 +988,7 @@
         sourceId: sourceId || void 0,
         self: self || void 0,
         joinedAt: joinedAt,
-        accountDate: void 0,
+        accountDate: accountDate,
       };
       e.storage.profiles = p;
       e.storage._lastUpdate = Date.now();
@@ -1126,7 +1184,7 @@
             y.after("getAvatarURL", proto, function (a, ret) {
               try {
                 const id = this && this.id;
-                if (id && (e.storage.profiles || {})[id]) {
+                if (id && (e.storage.profiles || EMPTY)[id]) {
                   const o = resolveAvatar(id);
                   if (o) return o;
                 }
@@ -1226,6 +1284,7 @@
           E.push(
             y.after("getMembers", GMS, function (a, ret) {
               try {
+                if (!anyProf()) return ret;
                 const profs = e.storage.profiles;
                 if (profs && ret) {
                   const arr = Array.isArray(ret)
@@ -1310,7 +1369,7 @@
             y.after("getUserBannerURL", BU, function (a, ret) {
               try {
                 const id = firstProfiledId(a);
-                const prof = id && (e.storage.profiles || {})[id];
+                const prof = id && (e.storage.profiles || EMPTY)[id];
                 if (prof && prof.sourceId) return resolveBanner(id);
               } catch {}
               return ret;
@@ -1325,7 +1384,7 @@
             y.after("getBannerURL", proto, function (a, ret) {
               try {
                 const id = this && this.id;
-                const prof = id && (e.storage.profiles || {})[id];
+                const prof = id && (e.storage.profiles || EMPTY)[id];
                 if (prof && prof.sourceId) return resolveBanner(id);
               } catch {}
               return ret;
@@ -1339,7 +1398,7 @@
             y.after("getAvatarDecorationURL", DU, function (a, ret) {
               try {
                 const id = extractId(a && a[0]);
-                if (id && (e.storage.profiles || {})[id]) return null;
+                if (id && (e.storage.profiles || EMPTY)[id]) return null;
               } catch {}
               return ret;
             }),
@@ -1353,7 +1412,7 @@
             y.after("getAvatarDecorationURL", proto, function (a, ret) {
               try {
                 const id = this && this.id;
-                if (id && (e.storage.profiles || {})[id]) return null;
+                if (id && (e.storage.profiles || EMPTY)[id]) return null;
               } catch {}
               return ret;
             }),
@@ -1774,6 +1833,7 @@
         pavatar = e.storage.profileAvatar || "",
         psource = e.storage.profileSource || "",
         pjoined = e.storage.profileJoined || "",
+        paccount = e.storage.profileAccount || "",
         psel = e.storage.profileSelf || !1,
         profs = e.storage.profiles || {},
         profKeys = Object.keys(profs),
@@ -1855,6 +1915,25 @@
               e.storage.message = o || "";
             },
             multiline: !0,
+          }),
+          n.React.createElement(f, {
+            title: "Server ID for [server] tag (optional)",
+            placeholder: "Paste a server ID; [server] becomes its name",
+            value: e.storage.serverTagId || "",
+            onChange: function (o) {
+              e.storage.serverTagId = o || "";
+              setTick(function (kk) {
+                return kk + 1;
+              });
+            },
+          }),
+          n.React.createElement(A, {
+            label:
+              "[server] = " +
+              (resolveServerName(null, Y()) ||
+                "(no match - join that server or recheck the ID)"),
+            subLabel:
+              "Type [server] in your message and it's swapped for the name when sent. Use [server:123] to name a specific server inline.",
           }),
           n.React.createElement(A, {
             label: "Link Previews",
@@ -2034,6 +2113,66 @@
               await runConvo();
             },
           }),
+          n.React.createElement(f, {
+            title: "Save this conversation as (optional)",
+            placeholder: "A name to find it later",
+            value: e.storage.convoSaveName || "",
+            onChange: function (o) {
+              e.storage.convoSaveName = o || "";
+            },
+          }),
+          n.React.createElement(A, {
+            label: "Save conversation",
+            subLabel:
+              "Keeps the text above on this device so you can reload it later. Stays local - nothing leaves your device.",
+            onPress: function () {
+              const txt = e.storage.conversationText || "";
+              if (!txt.trim()) {
+                tt("Nothing to save - the conversation box is empty.");
+                return;
+              }
+              const arr = (e.storage.savedConvos || []).slice();
+              const nm =
+                ("" + (e.storage.convoSaveName || "")).trim() ||
+                "Saved " + (arr.length + 1);
+              arr.push({ name: nm, text: txt });
+              e.storage.savedConvos = arr;
+              e.storage.convoSaveName = "";
+              tt('Saved "' + nm + '".');
+              setTick(function (kk) {
+                return kk + 1;
+              });
+            },
+          }),
+          (e.storage.savedConvos || []).length
+            ? n.React.createElement(A, {
+                label: "Clear saved conversations",
+                subLabel:
+                  (e.storage.savedConvos || []).length +
+                  " saved. Removes them all.",
+                onPress: function () {
+                  e.storage.savedConvos = [];
+                  tt("Cleared saved conversations.");
+                  setTick(function (kk) {
+                    return kk + 1;
+                  });
+                },
+              })
+            : null,
+          (e.storage.savedConvos || []).map(function (sc, idx) {
+            return n.React.createElement(A, {
+              key: "sc" + idx,
+              label: sc.name,
+              subLabel: "Tap to load this into the builder.",
+              onPress: function () {
+                e.storage.conversationText = sc.text || "";
+                tt('Loaded "' + sc.name + '".');
+                setTick(function (kk) {
+                  return kk + 1;
+                });
+              },
+            });
+          }),
         ),
         n.React.createElement(
           N,
@@ -2082,10 +2221,18 @@
           }),
           n.React.createElement(f, {
             title: "Server Member Since date (optional)",
-            placeholder: 'MM/DD/YYYY  (blank = your account date)',
+            placeholder: "e.g. 4/3/26  (blank = your account date)",
             value: pjoined,
             onChange: function (o) {
               e.storage.profileJoined = o || "";
+            },
+          }),
+          n.React.createElement(f, {
+            title: "Discord account created date (optional)",
+            placeholder: "e.g. 4/3/26  (blank = copies your account)",
+            value: paccount,
+            onChange: function (o) {
+              e.storage.profileAccount = o || "";
             },
           }),
           n.React.createElement(A, {
@@ -2167,6 +2314,9 @@
                   (e.storage.profileSource = pr.sourceId || ""),
                   (e.storage.profileJoined = pr.joinedAt
                     ? fmtSimple(pr.joinedAt)
+                    : ""),
+                  (e.storage.profileAccount = pr.accountDate
+                    ? fmtSimple(pr.accountDate)
                     : ""),
                   (e.storage.profileSelf = !!pr.self));
                 setTick(function (kk) {
