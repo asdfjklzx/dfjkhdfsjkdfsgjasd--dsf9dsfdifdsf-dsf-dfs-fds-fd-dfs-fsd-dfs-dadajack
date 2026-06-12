@@ -1936,6 +1936,72 @@
               "Type [server] in your message and it's swapped for the name when sent. Use [server:123] to name a specific server inline.",
           }),
           n.React.createElement(A, {
+            label: "Use the server I'm in now",
+            subLabel: "One tap - fills the box above with your current server.",
+            onPress: function () {
+              const ch = O && O.getChannel && O.getChannel(Y());
+              const gid = ch && ch.guild_id;
+              if (!gid) {
+                tt("You're not in a server right now - open a server channel first.");
+                return;
+              }
+              e.storage.serverTagId = gid;
+              const g = Q && Q.getGuild && Q.getGuild(gid);
+              tt('Set to "' + ((g && g.name) || gid) + '".');
+              setTick(function (kk) {
+                return kk + 1;
+              });
+            },
+          }),
+          n.React.createElement(A, {
+            label: e.storage.serverPickerOpen
+              ? "Hide server list"
+              : "Pick from my servers",
+            subLabel: "Choose a server by name - no ID needed.",
+            onPress: function () {
+              e.storage.serverPickerOpen = !e.storage.serverPickerOpen;
+              setTick(function (kk) {
+                return kk + 1;
+              });
+            },
+          }),
+          e.storage.serverPickerOpen
+            ? (function () {
+                let guilds = [];
+                try {
+                  const all = (Q && Q.getGuilds && Q.getGuilds()) || {};
+                  guilds = Object.keys(all)
+                    .map(function (k) {
+                      return all[k];
+                    })
+                    .filter(function (g) {
+                      return g && g.name;
+                    });
+                  guilds.sort(function (a, b) {
+                    return ("" + a.name).localeCompare("" + b.name);
+                  });
+                } catch {}
+                if (!guilds.length)
+                  return n.React.createElement(A, {
+                    label: "(no servers found)",
+                  });
+                return guilds.map(function (g) {
+                  return n.React.createElement(A, {
+                    key: "g" + g.id,
+                    label: g.name,
+                    onPress: function () {
+                      e.storage.serverTagId = g.id;
+                      e.storage.serverPickerOpen = !1;
+                      tt('Set to "' + g.name + '".');
+                      setTick(function (kk) {
+                        return kk + 1;
+                      });
+                    },
+                  });
+                });
+              })()
+            : null,
+          n.React.createElement(A, {
             label: "Link Previews",
             subLabel:
               "Show embeds for links in fake messages (YouTube, websites, images).",
