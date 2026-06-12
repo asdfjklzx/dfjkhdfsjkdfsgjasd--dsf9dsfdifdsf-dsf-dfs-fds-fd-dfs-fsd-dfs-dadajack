@@ -17,6 +17,13 @@
   function x(r) {
     return ((new Date(r).getTime() - 14200704e5) * 4194304).toString();
   }
+  let _lastSnow = 0;
+  function genId(r) {
+    let b = (new Date(r).getTime() - 14200704e5) * 4194304;
+    if (!(b > _lastSnow)) b = _lastSnow + 8192;
+    _lastSnow = b;
+    return b.toString();
+  }
   function lastSundayDate(year, month1) {
     const last = new Date(Date.UTC(year, month1, 0));
     return last.getUTCDate() - last.getUTCDay();
@@ -368,7 +375,7 @@
   }
   async function P(r, s, c, u, t, ref) {
     c = applyTags(c, r);
-    const d = t || x(u || nowISO());
+    const d = t || genId(u || nowISO());
     try {
       const g = u || nowISO(),
         h = {
@@ -377,6 +384,7 @@
           channel_id: r,
           author: mkAuthor(s),
           content: c,
+          nonce: d,
           mentions: [],
           mention_roles: [],
           pinned: !1,
@@ -486,35 +494,50 @@
     } catch {}
     return null;
   }
+  function ytId(url) {
+    let m;
+    if ((m = url.match(/[?&]v=([\w-]{11})/))) return m[1];
+    if ((m = url.match(/youtu\.be\/([\w-]{11})/))) return m[1];
+    if ((m = url.match(/youtube\.com\/shorts\/([\w-]{11})/))) return m[1];
+    if ((m = url.match(/youtube\.com\/embed\/([\w-]{11})/))) return m[1];
+    if ((m = url.match(/youtube\.com\/live\/([\w-]{11})/))) return m[1];
+    return null;
+  }
   async function fetchYouTube(url) {
+    const vid = ytId(url);
+    let data = {};
     try {
       const res = await fetchT(
         "https://www.youtube.com/oembed?format=json&url=" +
           encodeURIComponent(url),
         8000,
       );
-      if (!res || !res.ok) return null;
-      const data = await res.json();
-      const embed = {
-        type: "rich",
+      if (res && res.ok) data = await res.json();
+    } catch {}
+    if (!vid && !data.title) return null;
+    const w = data.thumbnail_width || 1280,
+      h = data.thumbnail_height || 720,
+      embed = {
+        type: vid ? "video" : "rich",
         url: url,
         color: 0xff0000,
-        footer: { text: "YouTube" },
+        provider: { name: "YouTube", url: "https://www.youtube.com" },
       };
-      if (data.title) embed.title = ("" + data.title).slice(0, 256);
-      if (data.author_name)
-        embed.author = { name: data.author_name, url: data.author_url };
-      if (data.thumbnail_url)
-        embed.image = {
-          url: data.thumbnail_url,
-          proxy_url: data.thumbnail_url,
-          width: data.thumbnail_width || 1280,
-          height: data.thumbnail_height || 720,
-        };
-      return embed;
-    } catch {
-      return null;
-    }
+    if (data.title) embed.title = ("" + data.title).slice(0, 256);
+    if (data.author_name)
+      embed.author = { name: data.author_name, url: data.author_url };
+    const thumb =
+      data.thumbnail_url ||
+      (vid ? "https://i.ytimg.com/vi/" + vid + "/hqdefault.jpg" : null);
+    if (thumb)
+      embed.thumbnail = { url: thumb, proxy_url: thumb, width: w, height: h };
+    if (vid)
+      embed.video = {
+        url: "https://www.youtube.com/embed/" + vid,
+        width: 1280,
+        height: 720,
+      };
+    return embed;
   }
   async function fetchOpenGraph(url) {
     try {
@@ -726,7 +749,7 @@
       let iso = parsed.time ? parseTime(parsed.time, base, useUTC) : null;
       iso || (iso = new Date(fallback).toISOString());
       fallback += 6e4;
-      const id = x(iso);
+      const id = genId(iso);
       let ref = null;
       if (parsed.reply) {
         const target = parsed.reply.prev
@@ -1981,24 +2004,63 @@
                     return ("" + a.name).localeCompare("" + b.name);
                   });
                 } catch {}
-                if (!guilds.length)
-                  return n.React.createElement(A, {
-                    label: "(no servers found)",
+                const sq = ("" + (e.storage.serverSearch || ""))
+                  .trim()
+                  .toLowerCase();
+                if (sq)
+                  guilds = guilds.filter(function (g) {
+                    return ("" + g.name).toLowerCase().indexOf(sq) !== -1;
                   });
-                return guilds.map(function (g) {
-                  return n.React.createElement(A, {
-                    key: "g" + g.id,
-                    label: g.name,
-                    onPress: function () {
-                      e.storage.serverTagId = g.id;
-                      e.storage.serverPickerOpen = !1;
-                      tt('Set to "' + g.name + '".');
-                      setTick(function (kk) {
-                        return kk + 1;
-                      });
-                    },
-                  });
+                const total = guilds.length,
+                  shown = guilds.slice(0, 30),
+                  rows = [
+                    n.React.createElement(f, {
+                      key: "ssearch",
+                      title: "Search servers",
+                      placeholder: "Type a server name",
+                      value: e.storage.serverSearch || "",
+                      onChange: function (o) {
+                        e.storage.serverSearch = o || "";
+                        setTick(function (kk) {
+                          return kk + 1;
+                        });
+                      },
+                    }),
+                  ];
+                if (!shown.length)
+                  rows.push(
+                    n.React.createElement(A, {
+                      key: "snone",
+                      label: sq ? "(no servers match)" : "(no servers found)",
+                    }),
+                  );
+                shown.forEach(function (g) {
+                  rows.push(
+                    n.React.createElement(A, {
+                      key: "g" + g.id,
+                      label: g.name,
+                      onPress: function () {
+                        e.storage.serverTagId = g.id;
+                        e.storage.serverPickerOpen = !1;
+                        e.storage.serverSearch = "";
+                        tt('Set to "' + g.name + '".');
+                        setTick(function (kk) {
+                          return kk + 1;
+                        });
+                      },
+                    }),
+                  );
                 });
+                if (total > shown.length)
+                  rows.push(
+                    n.React.createElement(A, {
+                      key: "smore",
+                      label:
+                        total - shown.length + " more - keep typing to narrow",
+                      subLabel: "Showing the first 30 matches.",
+                    }),
+                  );
+                return rows;
               })()
             : null,
           n.React.createElement(A, {
@@ -2151,7 +2213,7 @@
                         0,
                       )
                 ).toISOString(),
-                m = x(C);
+                m = genId(C);
               (await P(o, p, a, C, m),
                 z(o, p, a, m, C),
                 tt("Fake message sent."));
