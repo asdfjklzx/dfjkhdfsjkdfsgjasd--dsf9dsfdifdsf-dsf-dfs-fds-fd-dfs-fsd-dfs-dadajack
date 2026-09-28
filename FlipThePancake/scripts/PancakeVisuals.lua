@@ -330,6 +330,17 @@ local function addLongHandle(model, startX, panItem)
 	newPart({ Name = "HandleEnd", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.36, 0.56, 0.56),
 		CFrame = CFrame.new(startX + 3.65, 0.33, 0) * FLAT, Color = gripColor, Material = Enum.Material.Wood, Parent = model })
 	disk(model, "HangingHole", 0.38, 0.18, CFrame.new(startX + 3.5, 0.33, 0), Color3.fromRGB(25, 18, 12))
+	-- a bracket joining the handle to the pan wall, with rivets on both sides
+	newPart({ Name = "HandleBracket", Size = Vector3.new(0.3, 0.42, 0.5), CFrame = CFrame.new(startX + 0.05, 0.28, 0),
+		Color = metal, Material = Enum.Material.Metal, Parent = model })
+	for _, z in ipairs({ -0.26, 0.26 }) do
+		ball(model, 0.09, Vector3.new(startX + 0.05, 0.3, z), STEEL, Enum.Material.Metal)
+	end
+	-- finger ridges on the grip
+	for i = 0, 3 do
+		newPart({ Name = "GripRidge", Size = Vector3.new(0.08, 0.38, 0.58), CFrame = CFrame.new(startX + 1.6 + i * 0.35, 0.33, 0),
+			Color = gripColor:Lerp(BLACK, 0.25), Material = Enum.Material.Wood, Parent = model })
+	end
 end
 
 -- Two U-shaped carry handles on the short sides of a griddle
@@ -339,6 +350,11 @@ local function addSideHandles(model, halfX, panItem)
 		local x = side * (halfX + 0.55)
 		newPart({ Name = "SideHandle", Size = Vector3.new(0.18, 0.18, 1.6), CFrame = CFrame.new(x, 0.35, 0),
 			Color = metal, Material = Enum.Material.Metal, Parent = model })
+		newPart({ Name = "SideHandleGrip", Shape = Enum.PartType.Cylinder, Size = Vector3.new(1, 0.26, 0.26), CFrame = CFrame.new(x, 0.35, 0) * CFrame.Angles(0, math.rad(90), 0),
+			Color = panItem.HandleColor or WOOD, Material = Enum.Material.Wood, Parent = model })
+		for _, z in ipairs({ -0.7, 0.7 }) do
+			ball(model, 0.1, Vector3.new(side * (halfX + 0.12), 0.42, z), STEEL, Enum.Material.Metal)
+		end
 		for _, z in ipairs({ -0.7, 0.7 }) do
 			newPart({ Name = "SideHandleArm", Size = Vector3.new(0.5, 0.16, 0.16), CFrame = CFrame.new(side * (halfX + 0.35), 0.35, z),
 				Color = metal, Material = Enum.Material.Metal, Parent = model })
@@ -411,16 +427,25 @@ function PancakeVisuals.BuildPan(panItem, sizeItem)
 			disk(model, "CookingSurface", 0.01, radius * 2 - 0.5, CFrame.new(0, 0.128, 0), color:Lerp(WHITE, 0.06), material)
 		end
 
-		local count = math.max(24, math.ceil(2 * math.pi * radius / 0.6))
-		local blockLength = 2 * math.pi * (radius + 0.05) / count + 0.05
+		-- a smooth wall: many thin segments, each long enough to meet its neighbors on the OUTSIDE edge (no gaps)
+		local count = math.max(48, math.ceil(2 * math.pi * (radius + 0.2) / 0.3))
+		local wallLength = 2 * math.pi * (radius + 0.18) / count + 0.03
+		local lipLength = 2 * math.pi * (radius + 0.27) / count + 0.03
 		for i = 1, count do
-			local angle = i / count * math.pi * 2
-			newPart({ Name = "Rim", Size = Vector3.new(0.25, 0.5, blockLength),
-				CFrame = CFrame.Angles(0, angle, 0) * CFrame.new(radius + 0.05, 0.125, 0),
+			local turn = CFrame.Angles(0, i / count * math.pi * 2, 0)
+			newPart({ Name = "Rim", Size = Vector3.new(0.25, 0.5, wallLength),
+				CFrame = turn * CFrame.new(radius + 0.05, 0.125, 0),
 				Color = wallColor, Material = wallMaterial, Reflectance = reflectance, Parent = model })
-			newPart({ Name = "Lip", Size = Vector3.new(0.36, 0.07, blockLength + 0.04),
-				CFrame = CFrame.Angles(0, angle, 0) * CFrame.new(radius + 0.08, 0.41, 0),
+			-- a rolled lip on top, slightly flared outward
+			newPart({ Name = "Lip", Size = Vector3.new(0.38, 0.09, lipLength),
+				CFrame = turn * CFrame.new(radius + 0.09, 0.415, 0),
 				Color = lipColor, Material = lipMaterial, Reflectance = reflectance, Parent = model })
+		end
+		-- a ring under the pan (the part that sits on the burner)
+		disk(model, "BaseRing", 0.08, radius * 1.25, CFrame.new(0, -0.28, 0), underColor:Lerp(BLACK, 0.2), material)
+		if not image then
+			-- a worn, slightly darker circle in the middle where the pancakes cook
+			disk(model, "WearMark", 0.01, radius * 1.3, CFrame.new(0, 0.13, 0), color:Lerp(BLACK, 0.1), material)
 		end
 		addLongHandle(model, radius + 0.2, panItem)
 		if radius >= 3 then
