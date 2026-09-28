@@ -14,6 +14,8 @@
   .soft { text-shadow: -1.5px -1.5px 0 rgba(0,0,0,.8), 1.5px -1.5px 0 rgba(0,0,0,.8), -1.5px 1.5px 0 rgba(0,0,0,.8), 1.5px 1.5px 0 rgba(0,0,0,.8); }
   .band { position: absolute; top: 0; height: 100%; }
   .rbx { font-family: 'Segoe UI', Arial, sans-serif; }
+  /* UIStyle: the glossy sheen every rounded panel and button gets in game (white on top, ~80% at the bottom) */
+  .sheen { background-image: linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,.035) 45%, rgba(0,0,0,.2) 100%); }
 </style>
 </head>
 <body>
@@ -35,9 +37,9 @@
   </div>
 
   <!-- Butter counter -->
-  <div class="ui" style="left:525px;top:44px;width:230px;height:56px;border-radius:16px;background:#ffde59;border:3px solid #966414;display:flex;align-items:center;justify-content:center;color:#6e3c0a;font-size:34px;box-shadow:0 4px 0 rgba(0,0,0,.18);">🧈 1,240</div>
+  <div class="ui sheen" style="left:525px;top:44px;width:230px;height:56px;border-radius:16px;background:#ffde59;border:3px solid #966414;display:flex;align-items:center;justify-content:center;color:#6e3c0a;font-size:34px;box-shadow:0 4px 0 rgba(0,0,0,.18);">🧈 1,240</div>
   <!-- Leave button (next to the counter) -->
-  <div class="ui" style="left:765px;top:44px;width:120px;height:44px;border-radius:12px;background:#dc4646;border:3px solid #3c2314;display:flex;align-items:center;justify-content:center;color:#fff;font-size:24px;box-shadow:0 4px 0 rgba(0,0,0,.18);">✕ Leave</div>
+  <div class="ui sheen" style="left:765px;top:44px;width:120px;height:44px;border-radius:12px;background:#dc4646;border:3px solid #3c2314;display:flex;align-items:center;justify-content:center;color:#fff;font-size:24px;box-shadow:0 4px 0 rgba(0,0,0,.18);">✕ Leave</div>
   <!-- hint -->
   <div id="hint" class="ui soft" style="left:340px;top:108px;width:600px;height:30px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:24px;"></div>
 
@@ -52,7 +54,7 @@
   <div id="power" class="ui" style="left:400px;top:548px;width:480px;height:34px;border-radius:8px;background:#5a1919;border:3px solid #3c2314;"></div>
 
   <!-- Action button -->
-  <div class="ui" style="left:500px;top:612px;width:280px;height:84px;border-radius:20px;background:#eb3c3c;border:4px solid #3c2314;display:flex;align-items:center;justify-content:center;color:#fff;font-size:46px;text-shadow:0 3px 0 rgba(0,0,0,.35);box-shadow:0 5px 0 rgba(0,0,0,.25);">RELEASE!</div>
+  <div class="ui sheen" style="left:500px;top:612px;width:280px;height:84px;border-radius:20px;background:#eb3c3c;border:4px solid #3c2314;display:flex;align-items:center;justify-content:center;color:#fff;font-size:46px;text-shadow:0 3px 0 rgba(0,0,0,.35);box-shadow:0 5px 0 rgba(0,0,0,.25);">RELEASE!</div>
 </div>
 
 <script>
@@ -117,12 +119,12 @@ function cyl(center, axis, length, radius, color, layer, o = {}) {
     top.push(add(add(center, mul(axis, length / 2)), mul(dir, radius)));
     bot.push(add(add(center, mul(axis, -length / 2)), mul(dir, radius)));
   }
-  addFace(top, o.capColor || color, layer, { normal: axis, emissive: o.emissive, ...(o.cap || {}) });
-  addFace(bot, color, layer, { normal: mul(axis, -1), emissive: o.emissive });
+  addFace(top, o.capColor || color, layer, { normal: axis, emissive: o.emissive, mat: o.mat, alpha: o.alpha, ...(o.cap || {}) });
+  addFace(bot, color, layer, { normal: mul(axis, -1), emissive: o.emissive, alpha: o.alpha });
   for (let i = 0; i < sides; i++) {
     const j = (i + 1) % sides;
     addFace([bot[i], bot[j], top[j], top[i]], o.sideColor || color, layer,
-      { normal: norm(add(dirs[i], dirs[j])), emissive: o.emissive, seam: true });
+      { normal: norm(add(dirs[i], dirs[j])), emissive: o.emissive, alpha: o.alpha, seam: true, mat: o.mat === 'glass' ? null : o.mat, strip: o.mat === 'glass' ? [i, sides] : null });
   }
 }
 const upright = (x, y, z, h, d, color, layer, o) => cyl(at(x, y, z), [0, 1, 0], h, d / 2, color, layer, o);
@@ -130,44 +132,94 @@ const facing = (x, y, z, h, d, color, layer, o) => cyl(at(x, y, z), [0, 0, 1], h
 const rgb = (r, g, b) => [r, g, b];
 
 // ---------------- the station (mirrors PancakeServer) ----------------
-// Checkered floor
-for (let ix = 0; ix <= 8; ix++) for (let iz = 0; iz <= 6; iz++)
-  box(at(-8 + ix * 2, 0.1, -4.5 + iz * 2), [2, 0.2, 2], (ix + iz) % 2 === 0 ? rgb(250, 248, 240) : rgb(45, 45, 55), 0);
+// `mat` names the Roblox material, so the face gets a matching texture (grain, veins, brushing...)
+const M = (m, extra = {}) => ({ face: () => ({ mat: m, ...extra }) });
+const onFront = (fn) => (ax, s) => ax === 2 && s === 1 ? fn : null;
+const CHROME = rgb(215, 218, 225), IRON = rgb(40, 40, 45), CABINET = rgb(205, 65, 65);
 
-// Wall, backsplash, sign
-box(at(0, 6, -3.75), [18, 12, 0.5], rgb(125, 205, 200), 1);
-box(at(0, 5.1, -3.45), [18, 3, 0.1], rgb(245, 245, 240), 2, {
-  face: (ax, s) => ax === 2 && s === 1 ? { after: tileGrid } : null });
+// Checkered floor: marble + slate
+for (let ix = 0; ix <= 8; ix++) for (let iz = 0; iz <= 6; iz++) {
+  const light = (ix + iz) % 2 === 0;
+  box(at(-8 + ix * 2, 0.1, -4.5 + iz * 2), [2, 0.2, 2], light ? rgb(250, 248, 240) : rgb(45, 45, 55), 0, M(light ? 'marble' : 'slate'));
+}
+
+// Wall (plaster), tiled backsplash with chrome trim, crown molding, sign
+box(at(0, 6, -3.75), [18, 12, 0.5], rgb(125, 205, 200), 1, M('plaster'));
+box(at(0, 5.1, -3.45), [18, 3, 0.1], rgb(245, 245, 240), 2, { face: onFront({ mat: 'tiles', after: tileGrid }) });
+for (const y of [3.6, 6.6]) box(at(0, y, -3.4), [18, 0.15, 0.16], CHROME, 2, M('metal'));
+box(at(0, 11.75, -3.4), [18.4, 0.5, 0.5], rgb(250, 248, 240), 2, M('wood'));
+box(at(0, 11.4, -3.35), [18.4, 0.2, 0.7], rgb(250, 248, 240), 2, M('wood'));
+box(at(0, 9.5, -3.5), [11.6, 3.2, 0.2], rgb(110, 70, 42), 2, M('wood'));
 box(at(0, 9.5, -3.4), [11, 2.6, 0.3], rgb(210, 45, 55), 2, {
-  face: (ax, s) => ax === 2 && s === 1 ? { after: (ctx, p) => faceText(ctx, p, '🥞 FLIP THE PANCAKE! 🥞', '#fff', 0.8) } : null });
+  face: (ax, s) => ax === 2 && s === 1 ? { mat: 'wood', after: (ctx, p) => faceText(ctx, p, '🥞 FLIP THE PANCAKE! 🥞', '#fff', 0.8) } : { mat: 'wood' } });
+for (const x of [-5.2, 5.2]) for (const y of [10.55, 8.45]) upright(x, y, -3.23, 0.05, 0.22, CHROME, 2, { sides: 10 });
 
-// Shelves + jars
-for (const side of [-1, 1]) box(at(6.5 * side, 7.2, -3.05), [4, 0.25, 0.9], rgb(150, 100, 60), 2);
+// Utensil rail on the backsplash
+box(at(0, 6.3, -3.28), [7.5, 0.12, 0.12], CHROME, 2, M('metal'));
+for (const [x, len, kind] of [[-3, 1.1, 'ladle'], [-1.6, 0.9, 'whisk'], [1.6, 1, 'turner'], [3, 1.1, 'spoon']]) {
+  const wood = kind === 'spoon';
+  box(at(x, 6.05 - len / 2, -3.28), [0.1, len, 0.08], wood ? rgb(170, 120, 75) : CHROME, 2, M(wood ? 'wood' : 'metal'));
+  const hy = 6.05 - len - 0.2;
+  if (kind === 'ladle') facing(x, hy, -3.22, 0.2, 0.5, CHROME, 2, { sides: 14 });
+  else if (kind === 'whisk') for (const i of [-1, 0, 1]) box(at(x + i * 0.09, hy, -3.28), [0.04, 0.55, 0.04], CHROME, 2, { basis: rotZ(i * 0.18) });
+  else if (kind === 'turner') box(at(x, hy, -3.28), [0.45, 0.5, 0.04], CHROME, 2, M('metal'));
+  else facing(x, hy + 0.05, -3.25, 0.15, 0.35, rgb(170, 120, 75), 2, { sides: 12 });
+}
+
+// Shelves on brackets + glass jars (food inside, metal lids, paper labels)
+for (const side of [-1, 1]) {
+  box(at(6.5 * side, 7.2, -3.05), [4, 0.25, 0.9], rgb(150, 100, 60), 2, M('wood'));
+  for (const dx of [-1.5, 1.5]) box(at(6.5 * side + dx, 6.85, -3.15), [0.12, 0.5, 0.7], IRON, 2);
+}
 const SHELF = [[-7.7, 0.9, rgb(255, 190, 60), rgb(200, 60, 60)], [-6.5, 0.9, rgb(200, 50, 70), rgb(245, 245, 245)],
   [-5.3, 0.9, rgb(245, 240, 225), rgb(90, 140, 200)], [5.3, 1.2, rgb(130, 65, 20), rgb(210, 50, 50)],
   [6.5, 0.9, rgb(70, 80, 170), rgb(245, 245, 245)], [7.7, 1.2, rgb(130, 65, 20), rgb(210, 50, 50)]];
 for (const [x, h, c, lid] of SHELF) {
-  upright(x, 7.325 + h / 2, -3.05, h, 0.65, c, 2, { sides: 20 });
-  upright(x, 7.325 + h + 0.075, -3.05, 0.15, 0.7, lid, 2, { sides: 20 });
+  upright(x, 7.325 + h * 0.42, -3.05, h * 0.8, 0.56, c, 2, { sides: 20 });
+  upright(x, 7.325 + h / 2, -3.05, h, 0.65, rgb(225, 240, 245), 2, { sides: 20, alpha: 0.35, cap: { alpha: 0.2 } });
+  upright(x, 7.325 + h + 0.075, -3.05, 0.15, 0.7, lid, 2, { sides: 20, mat: 'metal' });
+  box(at(x, 7.325 + h * 0.45, -2.72), [0.4, 0.3, 0.04], rgb(255, 250, 235), 2);
 }
 
-// Clock + OPEN sign
+// Clock (hour marks drawn on the face) + OPEN sign on a dark board
 facing(-7.25, 9.6, -3.42, 0.15, 2.3, rgb(210, 45, 55), 2);
 facing(-7.25, 9.6, -3.35, 0.15, 2.0, rgb(250, 250, 245), 2, { cap: { after: clockTicks } });
-box(at(-7.25, 9.98, -3.25), [0.1, 0.8, 0.05], rgb(40, 40, 45), 2);
-box(add(at(-7.25, 9.6, -3.24), mul(rotZ(-Math.PI / 3).ey, 0.26)), [0.14, 0.55, 0.05], rgb(40, 40, 45), 2, { basis: rotZ(-Math.PI / 3) });
+box(at(-7.25, 9.98, -3.25), [0.1, 0.8, 0.05], IRON, 2);
+box(add(at(-7.25, 9.6, -3.24), mul(rotZ(-Math.PI / 3).ey, 0.26)), [0.14, 0.55, 0.05], IRON, 2, { basis: rotZ(-Math.PI / 3) });
+facing(-7.25, 9.6, -3.2, 0.08, 0.16, rgb(210, 45, 55), 2, { sides: 10 });
+box(at(7.25, 9.6, -3.48), [2.4, 1.3, 0.08], rgb(30, 30, 38), 2, M('metal'));
+for (const dx of [-0.9, 0.9]) box(at(7.25 + dx, 10.8, -3.46), [0.04, 1.1, 0.04], IRON, 2);
 box(at(7.25, 9.6, -3.4), [2, 0.9, 0.15], rgb(255, 90, 170), 2, { emissive: true,
   face: (ax, s) => ax === 2 && s === 1 ? { glow: '#ff5aaa', after: (ctx, p) => faceText(ctx, p, 'OPEN', '#fff', 0.8) } : null });
 
-// Stove + counters
-box(at(0, 1.85, 0), [8, 3.5, 5], rgb(235, 235, 240), 3);
-box(at(0, 3.75, 0), [8.2, 0.3, 5.2], rgb(45, 45, 50), 3);
-box(at(0, 1.5, 2.55), [5, 1.6, 0.1], rgb(30, 30, 38), 3, { face: (ax, s) => ax === 2 && s === 1 ? { after: glassShine } : null });
-box(at(0, 2.65, 2.62), [5, 0.2, 0.25], rgb(185, 185, 195), 3);
-for (const x of [-3, -1.8, 1.8, 3]) facing(x, 3.2, 2.6, 0.25, 0.45, rgb(40, 40, 45), 3, { sides: 16 });
+// Stove: brushed steel, enamel top, oven door with a warm glow, knobs with chrome rings
+box(at(0, 1.85, 0), [8, 3.5, 5], rgb(225, 227, 232), 3, M('metal'));
+box(at(0, 3.75, 0), [8.2, 0.3, 5.2], rgb(45, 45, 50), 3, M('metal'));
+box(at(0, 3.62, 2.63), [8.3, 0.12, 0.1], CHROME, 3, M('metal'));
+box(at(0, 0.43, 2.52), [7.8, 0.45, 0.1], IRON, 3);
+box(at(0, 3.2, 2.52), [7.8, 0.75, 0.08], rgb(55, 55, 62), 3, M('metal'));
+box(at(0, 1.55, 2.52), [5.6, 2.3, 0.06], rgb(200, 202, 210), 3, M('metal'));
+box(at(0, 1.5, 2.55), [5, 1.6, 0.1], rgb(30, 30, 38), 3, { face: onFront({ after: ovenGlass }) });
+box(at(0, 2.65, 2.62), [5, 0.2, 0.25], rgb(185, 185, 195), 3, M('metal'));
+for (const x of [-2.4, 2.4]) box(at(x, 2.65, 2.55), [0.2, 0.2, 0.2], rgb(185, 185, 195), 3);
+box(at(1.4, 2.05, 2.78), [1, 1.4, 0.05], rgb(245, 245, 240), 3, { face: onFront({ mat: 'fabric', after: towelStripes }) });
+for (const x of [-3.6, 3.6]) box(at(x, 0.2, 2.2), [0.5, 0.2, 0.5], IRON, 3);
+for (const x of [-3, -1.8, 1.8, 3]) {
+  facing(x, 3.2, 2.56, 0.06, 0.6, CHROME, 3, { sides: 16 });
+  facing(x, 3.2, 2.6, 0.25, 0.45, rgb(40, 40, 45), 3, { sides: 16, cap: { after: knobPointer(x) } });
+}
+facing(0, 3.2, 2.56, 0.1, 0.2, rgb(255, 80, 60), 3, { sides: 10, emissive: true, cap: { glow: '#ff5040' } });
 for (const side of [-1, 1]) {
-  box(at(6.5 * side, 1.85, 0), [4, 3.5, 5], rgb(205, 65, 65), 3, { face: (ax, s) => ax === 2 && s === 1 ? { after: cabinetDoors } : null });
-  box(at(6.5 * side, 3.75, 0), [4.2, 0.3, 5.2], rgb(170, 120, 75), 3);
+  // cabinets: doors with an inset panel, chrome pulls, kickplate, marble top
+  box(at(6.5 * side, 1.85, 0), [4, 3.5, 5], CABINET, 3, M('wood'));
+  box(at(6.5 * side, 0.43, 2.52), [3.9, 0.45, 0.1], IRON, 3);
+  for (const dx of [-0.95, 0.95]) {
+    box(at(6.5 * side + dx, 2, 2.53), [1.75, 2.6, 0.08], [215, 82, 82], 3, M('wood'));
+    box(at(6.5 * side + dx, 2, 2.58), [1.25, 2.05, 0.06], [180, 57, 57], 3, M('wood'));
+    box(at(6.5 * side + dx - (dx > 0 ? 0.62 : -0.62), 2.35, 2.66), [0.12, 0.8, 0.12], CHROME, 3, M('metal'));
+  }
+  box(at(6.5 * side, 3.75, 0), [4.2, 0.3, 5.2], rgb(235, 230, 222), 3, M('marble'));
+  box(at(6.5 * side, 3.62, 2.63), [4.25, 0.12, 0.08], CHROME, 3, M('metal'));
 }
 
 // Player (classic noob colors), standing at the station, seen from behind
@@ -179,18 +231,35 @@ box(at(1.5, 3.2, 5), [1, 2, 1], rgb(245, 205, 48), 3);
 upright(0, 4.8, 5, 1.2, 1.25, rgb(245, 205, 48), 3, { sides: 24 });
 
 // Counter props
-for (let i = 0; i < 4; i++) upright(-6.2, 3.975 + i * 0.17, 0.8, 0.15, 2.2, rgb(250, 250, 250), 4);
-for (let i = 0; i < 3; i++) upright(-6.2, 4.73 + i * 0.3, 0.8, 0.3, 1.8, rgb(215, 150, 70), 4, { capColor: rgb(226, 168, 88) });
-box(at(-6.2, 5.48, 0.8), [0.5, 0.2, 0.4], rgb(255, 225, 90), 4);
-upright(-7.6, 4.6, -1.5, 1.4, 0.7, rgb(130, 65, 20), 4, { sides: 20 });
+// left: syrup bottle with a label, flour sack, salt + pepper
+upright(-7.6, 4.6, -1.5, 1.4, 0.7, rgb(130, 65, 20), 4, { sides: 20, mat: 'glass' });
+upright(-7.6, 4.55, -1.5, 0.5, 0.72, rgb(245, 235, 210), 4, { sides: 20 });
 upright(-7.6, 5.45, -1.5, 0.3, 0.4, rgb(210, 50, 50), 4, { sides: 16 });
-upright(7.2, 4.35, -1.2, 0.9, 1.8, rgb(120, 190, 230), 4);
-upright(7.2, 4.8, -1.2, 0.05, 1.6, rgb(250, 236, 200), 4);
+box(at(-5.2, 4.55, -1.9), [1.1, 1.3, 0.8], rgb(240, 232, 212), 4, { basis: rotY(0.3), face: () => ({ mat: 'fabric' }) });
+box(at(-5.2, 4.55, -1.9), [1.12, 0.3, 0.82], rgb(90, 140, 200), 4, { basis: rotY(0.3) });
+box(at(-5.2, 5.3, -1.9), [0.8, 0.35, 0.6], rgb(230, 220, 195), 4, { basis: rotY(0.3) });
+for (const [i, c] of [[1, rgb(250, 250, 250)], [2, rgb(60, 60, 65)]]) {
+  upright(-5.5 + i * 0.4, 4.18, 1.6, 0.55, 0.3, c, 4, { sides: 12 });
+  upright(-5.5 + i * 0.4, 4.5, 1.6, 0.12, 0.32, CHROME, 4, { sides: 12 });
+}
+// right: glass batter bowl, butter dish, plates, egg carton
+upright(7.2, 3.95, -1.2, 0.12, 1.3, rgb(100, 170, 215), 4, { sides: 24 });
+upright(7.2, 4.35, -1.2, 0.9, 1.8, rgb(120, 190, 230), 4, { mat: 'glass' });
+upright(7.2, 4.77, -1.2, 0.12, 1.95, rgb(245, 245, 250), 4, { cap: { fill: batterFill } });
 upright(6.2, 3.96, 1.5, 0.12, 1.3, rgb(250, 250, 250), 4);
 box(at(6.2, 4.22, 1.5), [0.7, 0.4, 0.5], rgb(255, 225, 90), 4);
+for (let i = 0; i < 4; i++) upright(5.2, 3.95 + i * 0.1, -1.6, 0.08, 1.3, rgb(250, 250, 250), 4, { sides: 24 });
+box(at(7.8, 4.08, 1.3), [1.4, 0.35, 0.7], rgb(190, 175, 150), 4, { basis: rotY(-0.2) });
+for (let i = 0; i < 3; i++) upright(7.8 + (-0.4 + i * 0.4) * Math.cos(0.2), 4.3, 1.3 + (-0.4 + i * 0.4) * Math.sin(0.2), 0.25, 0.3, rgb(250, 245, 235), 4, { sides: 12 });
 
-// Burner (neon) with glow
+// Burner: chrome drip pan, glowing element, small back burners with grates
+upright(0, 3.92, 0, 0.06, 4.6, CHROME, 4, { mat: 'metal' });
 upright(0, 3.95, 0, 0.1, 4, rgb(255, 100, 30), 4, { emissive: true, cap: { after: burnerGlow } });
+for (const side of [-1, 1]) {
+  upright(side * 3.1, 3.93, -1.6, 0.08, 1.3, rgb(30, 30, 34), 4, { sides: 20 });
+  box(at(side * 3.1, 3.98, -1.6), [1.5, 0.1, 0.12], IRON, 4);
+  box(at(side * 3.1, 3.98, -1.6), [0.12, 0.1, 1.5], IRON, 4);
+}
 
 // Pan: base, 24 rim blocks, handle
 const PAN = at(0, 4.125, 0);
@@ -199,7 +268,7 @@ for (let i = 1; i <= 24; i++) {
   const B = rotY(i / 24 * Math.PI * 2);
   box(add(PAN, add(mul(B.ex, 2.3), [0, 0.125, 0])), [0.25, 0.5, 0.65], rgb(40, 40, 45), 5, { basis: B });
 }
-box(add(PAN, [4.1, 0.25, 0]), [3.4, 0.35, 0.6], rgb(70, 45, 30), 5);
+box(add(PAN, [4.1, 0.25, 0]), [3.4, 0.35, 0.6], rgb(70, 45, 30), 5, M('wood'));
 
 // Pancake (charging the flip at PERFECT: golden edge, top still light)
 upright(0, 4.425, 0, 0.35, 3.4, rgb(201, 138, 69), 6, { sides: 48, cap: { fill: pancakeFill, after: pancakeDetails } });
@@ -289,6 +358,103 @@ function pancakeDetails(ctx) {
   }
 }
 
+function ovenGlass(ctx, p) {
+  const b = bounds(p);
+  ctx.save(); ctx.beginPath(); p.forEach((q, i) => i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1])); ctx.closePath(); ctx.clip();
+  const g = ctx.createLinearGradient(0, b.y0, 0, b.y1);
+  g.addColorStop(0, 'rgba(255,150,60,0)'); g.addColorStop(1, 'rgba(255,140,50,.45)');
+  ctx.fillStyle = g; ctx.fillRect(b.x0, b.y0, b.x1 - b.x0, b.y1 - b.y0);
+  ctx.strokeStyle = 'rgba(120,120,130,.8)'; ctx.lineWidth = 1.5;
+  const ry = b.y0 + (b.y1 - b.y0) * 0.6; ctx.beginPath(); ctx.moveTo(b.x0 + 6, ry); ctx.lineTo(b.x1 - 6, ry); ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,.12)';
+  ctx.beginPath(); ctx.moveTo(b.x0 + 30, b.y1); ctx.lineTo(b.x0 + 80, b.y0); ctx.lineTo(b.x0 + 115, b.y0); ctx.lineTo(b.x0 + 65, b.y1); ctx.fill();
+  ctx.restore();
+}
+function towelStripes(ctx, p) {
+  const b = bounds(p);
+  ctx.fillStyle = '#d22d37';
+  for (const t of [0.2, 0.75]) ctx.fillRect(b.x0, b.y0 + (b.y1 - b.y0) * t, b.x1 - b.x0, Math.max(2, (b.y1 - b.y0) * 0.09));
+}
+function knobPointer(x) {
+  return (ctx, p) => {
+    const b = bounds(p), a = x > 0 ? -0.6 : 0.4, r = (b.x1 - b.x0) * 0.42;
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(b.cx, b.cy); ctx.lineTo(b.cx + Math.sin(-a) * r, b.cy - Math.cos(a) * r); ctx.stroke();
+  };
+}
+function batterFill(ctx, p) {
+  const b = bounds(p);
+  const g = ctx.createRadialGradient(b.cx - 4, b.cy - 2, 2, b.cx, b.cy, (b.x1 - b.x0) / 2);
+  g.addColorStop(0, '#fffaf0'); g.addColorStop(0.8, '#f7e8c4'); g.addColorStop(0.86, '#dfeef6'); g.addColorStop(1, '#b8d8ea');
+  return g;
+}
+
+// ---------------- material textures (grain, veins, brushing, weave...) ----------------
+function hashRand(n) { let s = Math.abs(Math.floor(n)) % 2147483646 + 1; return () => (s = (s * 16807) % 2147483647) / 2147483647; }
+function applyMaterial(ctx, p, f) {
+  const b = bounds(p), w = b.x1 - b.x0, h = b.y1 - b.y0;
+  if (w < 3 || h < 3) return;
+  const r = hashRand(b.x0 * 13 + b.y0 * 7 + w * 3);
+  ctx.save(); ctx.beginPath(); p.forEach((q, i) => i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1])); ctx.closePath(); ctx.clip();
+  const lit = f.normal ? Math.max(0, dot(f.normal, LIGHT)) : 0.5;
+  switch (f.mat) {
+    case 'wood': {
+      const along = w >= h; ctx.lineWidth = 1;
+      const n = Math.ceil((along ? h : w) / 3);
+      for (let i = 0; i < n; i++) {
+        ctx.strokeStyle = r() < 0.5 ? 'rgba(60,30,10,.13)' : 'rgba(255,230,200,.08)';
+        const o = (i + r()) * 3; ctx.beginPath();
+        if (along) { ctx.moveTo(b.x0, b.y0 + o); ctx.bezierCurveTo(b.x0 + w * 0.3, b.y0 + o + (r() - 0.5) * 3, b.x0 + w * 0.7, b.y0 + o + (r() - 0.5) * 3, b.x1, b.y0 + o); }
+        else { ctx.moveTo(b.x0 + o, b.y0); ctx.bezierCurveTo(b.x0 + o + (r() - 0.5) * 3, b.y0 + h * 0.3, b.x0 + o + (r() - 0.5) * 3, b.y0 + h * 0.7, b.x0 + o, b.y1); }
+        ctx.stroke();
+      }
+      break;
+    }
+    case 'plaster': case 'slate': case 'fabric': {
+      const dots = Math.min(900, w * h / (f.mat === 'fabric' ? 10 : 22));
+      for (let i = 0; i < dots; i++) {
+        ctx.fillStyle = r() < 0.5 ? 'rgba(0,0,0,.06)' : 'rgba(255,255,255,.07)';
+        ctx.fillRect(b.x0 + r() * w, b.y0 + r() * h, 1.2, 1.2);
+      }
+      if (f.mat === 'fabric') {
+        ctx.strokeStyle = 'rgba(0,0,0,.05)'; ctx.lineWidth = 0.6;
+        for (let x = b.x0; x < b.x1; x += 2.5) { ctx.beginPath(); ctx.moveTo(x, b.y0); ctx.lineTo(x, b.y1); ctx.stroke(); }
+      }
+      if (f.mat === 'slate') { const g = ctx.createLinearGradient(b.x0, b.y0, b.x1, b.y1); g.addColorStop(0, 'rgba(255,255,255,.08)'); g.addColorStop(1, 'rgba(255,255,255,0)'); ctx.fillStyle = g; ctx.fillRect(b.x0, b.y0, w, h); }
+      break;
+    }
+    case 'marble': {
+      ctx.lineCap = 'round';
+      for (let i = 0; i < 2; i++) {
+        ctx.strokeStyle = `rgba(120,120,130,${0.12 + r() * 0.1})`; ctx.lineWidth = 0.8 + r();
+        ctx.beginPath(); ctx.moveTo(b.x0 + r() * w, b.y0);
+        ctx.bezierCurveTo(b.x0 + r() * w, b.y0 + h * 0.4, b.x0 + r() * w, b.y0 + h * 0.6, b.x0 + r() * w, b.y1); ctx.stroke();
+      }
+      const g = ctx.createLinearGradient(b.x0, b.y0, b.x1, b.y1);
+      g.addColorStop(0, 'rgba(255,255,255,.22)'); g.addColorStop(0.5, 'rgba(255,255,255,0)'); g.addColorStop(1, 'rgba(255,255,255,.06)');
+      ctx.fillStyle = g; ctx.fillRect(b.x0, b.y0, w, h);
+      break;
+    }
+    case 'metal': {
+      ctx.lineWidth = 0.7;
+      for (let y = b.y0; y < b.y1; y += 1.6) { ctx.strokeStyle = r() < 0.5 ? 'rgba(0,0,0,.05)' : 'rgba(255,255,255,.08)'; ctx.beginPath(); ctx.moveTo(b.x0, y); ctx.lineTo(b.x1, y); ctx.stroke(); }
+      const g = ctx.createLinearGradient(b.x0, b.y0, b.x1, b.y1);
+      g.addColorStop(0, `rgba(255,255,255,${0.1 + lit * 0.2})`); g.addColorStop(0.35, 'rgba(255,255,255,0)');
+      g.addColorStop(0.7, 'rgba(0,0,0,.08)'); g.addColorStop(1, 'rgba(255,255,255,.1)');
+      ctx.fillStyle = g; ctx.fillRect(b.x0, b.y0, w, h);
+      break;
+    }
+    case 'tiles': case 'glass': {
+      const g = ctx.createLinearGradient(b.x0, b.y0, b.x1, b.y1);
+      g.addColorStop(0, 'rgba(255,255,255,.28)'); g.addColorStop(0.4, 'rgba(255,255,255,0)'); g.addColorStop(1, 'rgba(255,255,255,.08)');
+      ctx.fillStyle = g; ctx.fillRect(b.x0, b.y0, w, h);
+      if (f.mat === 'glass' && w > 6) { ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.fillRect(b.x0 + w * 0.22, b.y0, Math.max(1.5, w * 0.08), h); }
+      break;
+    }
+  }
+  ctx.restore();
+}
+
 // ---------------- draw ----------------
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
@@ -328,9 +494,13 @@ function drawScene() {
     ctx.beginPath(); p.forEach((q, i) => i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1])); ctx.closePath();
     const style = f.fill ? f.fill(ctx, p) : shade(f);
     if (f.glow) { ctx.shadowColor = f.glow; ctx.shadowBlur = 28; }
+    ctx.globalAlpha = f.alpha ?? 1;
     ctx.fillStyle = style; ctx.fill();
     ctx.shadowBlur = 0; ctx.shadowColor = 'transparent';
     ctx.strokeStyle = typeof style === 'string' ? style : 'rgba(0,0,0,0)'; ctx.lineWidth = 0.8; ctx.stroke();
+    ctx.globalAlpha = 1;
+    if (f.mat) applyMaterial(ctx, p, f);
+    if (f.strip) { const [i, n] = f.strip; const t = i / n; if (t > 0.55 && t < 0.62) { ctx.fillStyle = 'rgba(255,255,255,.45)'; ctx.fill(); } }
     if (f.after) f.after(ctx, p);
   }
 

@@ -16,6 +16,8 @@ local camera = workspace.CurrentCamera
 local GameConfig = require(ReplicatedStorage:WaitForChild("GameConfig"))
 local PancakeVisuals = require(ReplicatedStorage:WaitForChild("PancakeVisuals"))
 local Effects = require(script.Parent:WaitForChild("Effects"))
+local UIStyle = require(ReplicatedStorage:WaitForChild("UIStyle"))
+UIStyle.Polish(playerGui) -- glossy sheen on every rounded panel and button (HUD, shop, rush hour)
 local Remotes = ReplicatedStorage:WaitForChild("Remotes")
 local PourRemote = Remotes:WaitForChild("Pour")
 local FlipRemote = Remotes:WaitForChild("Flip")

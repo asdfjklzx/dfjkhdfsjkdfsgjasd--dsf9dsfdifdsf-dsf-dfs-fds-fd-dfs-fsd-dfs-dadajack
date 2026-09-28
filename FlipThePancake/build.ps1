@@ -12,6 +12,7 @@ $scripts = @(
 	@{ File = "PancakeConfig.lua";             Class = "ModuleScript"; Name = "PancakeConfig";     Parent = "ReplicatedStorage" },
 	@{ File = "ToppingConfig.lua";             Class = "ModuleScript"; Name = "ToppingConfig";     Parent = "ReplicatedStorage" },
 	@{ File = "PancakeVisuals.lua";            Class = "ModuleScript"; Name = "PancakeVisuals";    Parent = "ReplicatedStorage" },
+	@{ File = "UIStyle.lua";                   Class = "ModuleScript"; Name = "UIStyle";           Parent = "ReplicatedStorage" },
 	@{ File = "PancakeServer.server.lua";      Class = "Script";       Name = "PancakeServer";     Parent = "ServerScriptService" },
 	@{ File = "DataManager.lua";               Class = "ModuleScript"; Name = "DataManager";       Parent = "ServerScriptService" },
 	@{ File = "EventManager.lua";              Class = "ModuleScript"; Name = "EventManager";      Parent = "ServerScriptService" },

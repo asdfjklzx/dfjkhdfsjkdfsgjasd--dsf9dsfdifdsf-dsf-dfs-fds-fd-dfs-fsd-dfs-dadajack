@@ -8,13 +8,20 @@ local GameConfig = {}
 -- RESTAURANTS (each one has a kitchen where one player cooks)
 -- They line Main Street, facing the spawn plaza.
 --------------------------------------------------------------------
+-- OutsideMaterial / RoofMaterial = Roblox material names for the outside walls and the roof edge
 GameConfig.Restaurants = {
-	{ Name = "Flapjack Diner",  Wall = Color3.fromRGB(125, 205, 200), Accent = Color3.fromRGB(220, 50, 60),  Outside = Color3.fromRGB(245, 240, 230) },
-	{ Name = "The Syrup Shack", Wall = Color3.fromRGB(240, 200, 150), Accent = Color3.fromRGB(150, 80, 30),  Outside = Color3.fromRGB(170, 105, 70) },
-	{ Name = "Butter Barn",     Wall = Color3.fromRGB(255, 235, 150), Accent = Color3.fromRGB(200, 40, 40),  Outside = Color3.fromRGB(190, 50, 45) },
-	{ Name = "Stack House",     Wall = Color3.fromRGB(190, 215, 255), Accent = Color3.fromRGB(40, 90, 180),  Outside = Color3.fromRGB(235, 240, 250) },
-	{ Name = "Golden Griddle",  Wall = Color3.fromRGB(255, 225, 180), Accent = Color3.fromRGB(215, 160, 30), Outside = Color3.fromRGB(60, 55, 60) },
-	{ Name = "Cosmic Cakes",    Wall = Color3.fromRGB(210, 190, 255), Accent = Color3.fromRGB(130, 60, 220), Outside = Color3.fromRGB(45, 35, 80) },
+	{ Name = "Flapjack Diner",  Wall = Color3.fromRGB(125, 205, 200), Accent = Color3.fromRGB(220, 50, 60),  Outside = Color3.fromRGB(245, 240, 230),
+		OutsideMaterial = "Plaster", RoofMaterial = "ClayRoofTiles" },
+	{ Name = "The Syrup Shack", Wall = Color3.fromRGB(240, 200, 150), Accent = Color3.fromRGB(150, 80, 30),  Outside = Color3.fromRGB(170, 105, 70),
+		OutsideMaterial = "WoodPlanks", RoofMaterial = "RoofShingles" },
+	{ Name = "Butter Barn",     Wall = Color3.fromRGB(255, 235, 150), Accent = Color3.fromRGB(200, 40, 40),  Outside = Color3.fromRGB(190, 50, 45),
+		OutsideMaterial = "WoodPlanks", RoofMaterial = "RoofShingles" },
+	{ Name = "Stack House",     Wall = Color3.fromRGB(190, 215, 255), Accent = Color3.fromRGB(40, 90, 180),  Outside = Color3.fromRGB(235, 240, 250),
+		OutsideMaterial = "Brick", RoofMaterial = "RoofShingles" },
+	{ Name = "Golden Griddle",  Wall = Color3.fromRGB(255, 225, 180), Accent = Color3.fromRGB(215, 160, 30), Outside = Color3.fromRGB(60, 55, 60),
+		OutsideMaterial = "Slate", RoofMaterial = "Slate" },
+	{ Name = "Cosmic Cakes",    Wall = Color3.fromRGB(210, 190, 255), Accent = Color3.fromRGB(130, 60, 220), Outside = Color3.fromRGB(45, 35, 80),
+		OutsideMaterial = "Concrete", RoofMaterial = "Slate" },
 }
 GameConfig.StationCount = #GameConfig.Restaurants
 GameConfig.StationPosition = Vector3.new(0, 0, 0) -- ground level of the island
