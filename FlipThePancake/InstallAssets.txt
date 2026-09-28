@@ -1,0 +1,11 @@
+HOW TO INSTALL THE 3D MODELS (one time)
+1. Open FlipThePancake.rbxlx in Roblox Studio (don't press Play).
+2. View > Command Bar (a text box appears at the bottom).
+3. Copy the ONE line below, paste it into the Command Bar, press Enter.
+4. Wait for "Installed ..." messages in the Output window.
+5. File > Save (Ctrl+S). Then press Play.
+
+It downloads the models listed in GameConfig.Assets into ReplicatedStorage > Assets
+and deletes any scripts hidden inside them (free models can contain bad scripts).
+
+local rs=game:GetService("ReplicatedStorage") local f=rs:FindFirstChild("Assets") or Instance.new("Folder") f.Name="Assets" f.Parent=rs for name,id in pairs(require(rs.GameConfig).Assets) do if not f:FindFirstChild(name) then local ok,objects=pcall(function() return game:GetObjects("rbxassetid://"..id) end) if ok and objects and objects[1] then local m=objects[1] if not m:IsA("Model") then local w=Instance.new("Model") for _,o in ipairs(objects) do o.Parent=w end m=w end for _,d in ipairs(m:GetDescendants()) do if d:IsA("LuaSourceContainer") then d:Destroy() end end m.Name=name m.Parent=f print("Installed "..name) else warn("Could not load "..name.." ("..tostring(id)..")") end end end

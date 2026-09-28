@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Flip the Pancake Mockup</title>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka+One&display=block" rel="stylesheet">
+<style>
+  html, body { margin: 0; padding: 0; background: #000; }
+  #screen { position: relative; width: 1280px; height: 720px; overflow: hidden;
+    font-family: 'Fredoka One', 'Arial Rounded MT Bold', 'Segoe UI', sans-serif; }
+  canvas { position: absolute; inset: 0; }
+  .ui { position: absolute; box-sizing: border-box; }
+  .outline { text-shadow: -2px -2px 0 #3c2314, 2px -2px 0 #3c2314, -2px 2px 0 #3c2314, 2px 2px 0 #3c2314, 0 3px 0 #3c2314; }
+  .soft { text-shadow: -1.5px -1.5px 0 rgba(0,0,0,.8), 1.5px -1.5px 0 rgba(0,0,0,.8), -1.5px 1.5px 0 rgba(0,0,0,.8), 1.5px 1.5px 0 rgba(0,0,0,.8); }
+  .band { position: absolute; top: 0; height: 100%; }
+  .rbx { font-family: 'Segoe UI', Arial, sans-serif; }
+</style>
+</head>
+<body>
+<div id="screen">
+  <canvas id="c" width="1280" height="720"></canvas>
+
+  <!-- Roblox top bar -->
+  <div class="ui" style="left:12px;top:8px;width:44px;height:44px;border-radius:12px;background:rgba(18,18,21,.6);display:flex;align-items:center;justify-content:center;">
+    <div style="width:18px;height:18px;border:3px solid #fff;border-radius:4px;transform:rotate(15deg);"></div>
+  </div>
+  <div class="ui" style="left:64px;top:8px;width:44px;height:44px;border-radius:12px;background:rgba(18,18,21,.6);display:flex;align-items:center;justify-content:center;color:#fff;font-size:22px;">💬</div>
+
+  <!-- Roblox player list (leaderstats) -->
+  <div class="ui rbx" style="right:12px;top:8px;width:230px;border-radius:10px;background:rgba(25,27,31,.72);color:#fff;overflow:hidden;">
+    <div style="display:flex;justify-content:space-between;padding:7px 12px;font-size:13px;color:#cfd3da;background:rgba(0,0,0,.25);"><span>People</span><span>Butter</span></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 12px;font-size:15px;font-weight:600;">
+      <span style="display:flex;align-items:center;gap:8px;"><span style="width:22px;height:22px;border-radius:50%;background:#f5cd30;display:inline-block;"></span>Player1</span><span>1,240</span>
+    </div>
+  </div>
+
+  <!-- Butter counter -->
+  <div class="ui" style="left:525px;top:44px;width:230px;height:56px;border-radius:16px;background:#ffde59;border:3px solid #966414;display:flex;align-items:center;justify-content:center;color:#6e3c0a;font-size:34px;box-shadow:0 4px 0 rgba(0,0,0,.18);">🧈 1,240</div>
+  <!-- Leave button (next to the counter) -->
+  <div class="ui" style="left:765px;top:44px;width:120px;height:44px;border-radius:12px;background:#dc4646;border:3px solid #3c2314;display:flex;align-items:center;justify-content:center;color:#fff;font-size:24px;box-shadow:0 4px 0 rgba(0,0,0,.18);">✕ Leave</div>
+  <!-- hint -->
+  <div id="hint" class="ui soft" style="left:340px;top:108px;width:600px;height:30px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:24px;"></div>
+
+  <!-- Cook meter (BillboardGui above the pan, positioned by the 3D projection below) -->
+  <div id="meterWrap" class="ui" style="width:280px;height:60px;">
+    <div class="outline" style="position:absolute;left:0;top:0;width:100%;height:30px;display:flex;align-items:center;justify-content:center;color:#ffdc32;font-size:29px;">⭐ PERFECT! ⭐</div>
+    <div id="meter" style="position:absolute;left:0;top:34px;width:100%;height:24px;box-sizing:border-box;border:3px solid #3c2314;background:#3c2314;"></div>
+  </div>
+
+  <!-- Power bar -->
+  <div class="ui soft" style="left:400px;top:516px;width:480px;height:28px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:24px;">HOLD, then RELEASE on the ⭐ GOLD!</div>
+  <div id="power" class="ui" style="left:400px;top:548px;width:480px;height:34px;border-radius:8px;background:#5a1919;border:3px solid #3c2314;"></div>
+
+  <!-- Action button -->
+  <div class="ui" style="left:500px;top:612px;width:280px;height:84px;border-radius:20px;background:#eb3c3c;border:4px solid #3c2314;display:flex;align-items:center;justify-content:center;color:#fff;font-size:46px;text-shadow:0 3px 0 rgba(0,0,0,.35);box-shadow:0 5px 0 rgba(0,0,0,.25);">RELEASE!</div>
+</div>
+
+<script>
+// ------------------------------------------------------------------
+// Tiny 3D renderer: same parts, positions and camera as the game code
+// ------------------------------------------------------------------
+const W = 1280, H = 720;
+const FL = (H / 2) / Math.tan(35 * Math.PI / 180); // 70 degree vertical FOV
+const add = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+const mul = (a, s) => [a[0] * s, a[1] * s, a[2] * s];
+const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+const len = a => Math.hypot(a[0], a[1], a[2]);
+const norm = a => mul(a, 1 / len(a));
+
+const P0 = [0, 0, -20];                        // GameConfig.StationPosition
+const at = (x, y, z) => [P0[0] + x, P0[1] + y, P0[2] + z];
+const REST = at(0, 4.425, 0);                  // pancake rest position
+const CAM = add(REST, [0, 8, 15]);             // CAMERA_OFFSET
+const LOOK = add(REST, [0, 2.5, 0]);
+const fwd = norm(sub(LOOK, CAM));
+const right = norm(cross(fwd, [0, 1, 0]));
+const up = cross(right, fwd);
+const LIGHT = norm([-0.35, 1, 0.55]);
+
+function proj(p) {
+  const d = sub(p, CAM);
+  const z = dot(d, fwd);
+  return [W / 2 + dot(d, right) / z * FL, H / 2 - dot(d, up) / z * FL, z];
+}
+
+const faces = [];
+function addFace(pts, color, layer, o = {}) { faces.push({ pts, color, layer, ...o }); }
+
+const AXES = { ex: [1, 0, 0], ey: [0, 1, 0], ez: [0, 0, 1] };
+function rotY(a) { return { ex: [Math.cos(a), 0, -Math.sin(a)], ey: [0, 1, 0], ez: [Math.sin(a), 0, Math.cos(a)] }; }
+function rotZ(a) { return { ex: [Math.cos(a), Math.sin(a), 0], ey: [-Math.sin(a), Math.cos(a), 0], ez: [0, 0, 1] }; }
+
+function box(c, s, color, layer, o = {}) {
+  const B = o.basis || AXES;
+  const axes = [B.ex, B.ey, B.ez];
+  const half = [mul(B.ex, s[0] / 2), mul(B.ey, s[1] / 2), mul(B.ez, s[2] / 2)];
+  const corner = idx => add(add(add(c, mul(half[0], idx[0])), mul(half[1], idx[1])), mul(half[2], idx[2]));
+  for (let ax = 0; ax < 3; ax++) for (const sgn of [1, -1]) {
+    const o1 = (ax + 1) % 3, o2 = (ax + 2) % 3;
+    const pts = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([a, b]) => { const idx = [0, 0, 0]; idx[ax] = sgn; idx[o1] = a; idx[o2] = b; return corner(idx); });
+    const extra = (o.face && o.face(ax, sgn)) || {};
+    addFace(pts, color, layer, { normal: mul(axes[ax], sgn), emissive: o.emissive, ...extra });
+  }
+}
+
+function cyl(center, axis, length, radius, color, layer, o = {}) {
+  const sides = o.sides || 32;
+  const a1 = norm(cross(axis, Math.abs(axis[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0]));
+  const a2 = cross(axis, a1);
+  const top = [], bot = [], dirs = [];
+  for (let i = 0; i < sides; i++) {
+    const t = i / sides * Math.PI * 2;
+    const dir = add(mul(a1, Math.cos(t)), mul(a2, Math.sin(t)));
+    dirs.push(dir);
+    top.push(add(add(center, mul(axis, length / 2)), mul(dir, radius)));
+    bot.push(add(add(center, mul(axis, -length / 2)), mul(dir, radius)));
+  }
+  addFace(top, o.capColor || color, layer, { normal: axis, emissive: o.emissive, ...(o.cap || {}) });
+  addFace(bot, color, layer, { normal: mul(axis, -1), emissive: o.emissive });
+  for (let i = 0; i < sides; i++) {
+    const j = (i + 1) % sides;
+    addFace([bot[i], bot[j], top[j], top[i]], o.sideColor || color, layer,
+      { normal: norm(add(dirs[i], dirs[j])), emissive: o.emissive, seam: true });
+  }
+}
+const upright = (x, y, z, h, d, color, layer, o) => cyl(at(x, y, z), [0, 1, 0], h, d / 2, color, layer, o);
+const facing = (x, y, z, h, d, color, layer, o) => cyl(at(x, y, z), [0, 0, 1], h, d / 2, color, layer, o);
+const rgb = (r, g, b) => [r, g, b];
+
+// ---------------- the station (mirrors PancakeServer) ----------------
+// Checkered floor
+for (let ix = 0; ix <= 8; ix++) for (let iz = 0; iz <= 6; iz++)
+  box(at(-8 + ix * 2, 0.1, -4.5 + iz * 2), [2, 0.2, 2], (ix + iz) % 2 === 0 ? rgb(250, 248, 240) : rgb(45, 45, 55), 0);
+
+// Wall, backsplash, sign
+box(at(0, 6, -3.75), [18, 12, 0.5], rgb(125, 205, 200), 1);
+box(at(0, 5.1, -3.45), [18, 3, 0.1], rgb(245, 245, 240), 2, {
+  face: (ax, s) => ax === 2 && s === 1 ? { after: tileGrid } : null });
+box(at(0, 9.5, -3.4), [11, 2.6, 0.3], rgb(210, 45, 55), 2, {
+  face: (ax, s) => ax === 2 && s === 1 ? { after: (ctx, p) => faceText(ctx, p, '🥞 FLIP THE PANCAKE! 🥞', '#fff', 0.8) } : null });
+
+// Shelves + jars
+for (const side of [-1, 1]) box(at(6.5 * side, 7.2, -3.05), [4, 0.25, 0.9], rgb(150, 100, 60), 2);
+const SHELF = [[-7.7, 0.9, rgb(255, 190, 60), rgb(200, 60, 60)], [-6.5, 0.9, rgb(200, 50, 70), rgb(245, 245, 245)],
+  [-5.3, 0.9, rgb(245, 240, 225), rgb(90, 140, 200)], [5.3, 1.2, rgb(130, 65, 20), rgb(210, 50, 50)],
+  [6.5, 0.9, rgb(70, 80, 170), rgb(245, 245, 245)], [7.7, 1.2, rgb(130, 65, 20), rgb(210, 50, 50)]];
+for (const [x, h, c, lid] of SHELF) {
+  upright(x, 7.325 + h / 2, -3.05, h, 0.65, c, 2, { sides: 20 });
+  upright(x, 7.325 + h + 0.075, -3.05, 0.15, 0.7, lid, 2, { sides: 20 });
+}
+
+// Clock + OPEN sign
+facing(-7.25, 9.6, -3.42, 0.15, 2.3, rgb(210, 45, 55), 2);
+facing(-7.25, 9.6, -3.35, 0.15, 2.0, rgb(250, 250, 245), 2, { cap: { after: clockTicks } });
+box(at(-7.25, 9.98, -3.25), [0.1, 0.8, 0.05], rgb(40, 40, 45), 2);
+box(add(at(-7.25, 9.6, -3.24), mul(rotZ(-Math.PI / 3).ey, 0.26)), [0.14, 0.55, 0.05], rgb(40, 40, 45), 2, { basis: rotZ(-Math.PI / 3) });
+box(at(7.25, 9.6, -3.4), [2, 0.9, 0.15], rgb(255, 90, 170), 2, { emissive: true,
+  face: (ax, s) => ax === 2 && s === 1 ? { glow: '#ff5aaa', after: (ctx, p) => faceText(ctx, p, 'OPEN', '#fff', 0.8) } : null });
+
+// Stove + counters
+box(at(0, 1.85, 0), [8, 3.5, 5], rgb(235, 235, 240), 3);
+box(at(0, 3.75, 0), [8.2, 0.3, 5.2], rgb(45, 45, 50), 3);
+box(at(0, 1.5, 2.55), [5, 1.6, 0.1], rgb(30, 30, 38), 3, { face: (ax, s) => ax === 2 && s === 1 ? { after: glassShine } : null });
+box(at(0, 2.65, 2.62), [5, 0.2, 0.25], rgb(185, 185, 195), 3);
+for (const x of [-3, -1.8, 1.8, 3]) facing(x, 3.2, 2.6, 0.25, 0.45, rgb(40, 40, 45), 3, { sides: 16 });
+for (const side of [-1, 1]) {
+  box(at(6.5 * side, 1.85, 0), [4, 3.5, 5], rgb(205, 65, 65), 3, { face: (ax, s) => ax === 2 && s === 1 ? { after: cabinetDoors } : null });
+  box(at(6.5 * side, 3.75, 0), [4.2, 0.3, 5.2], rgb(170, 120, 75), 3);
+}
+
+// Player (classic noob colors), standing at the station, seen from behind
+box(at(-0.5, 1.2, 5), [1, 2, 1], rgb(40, 127, 71), 3);
+box(at(0.5, 1.2, 5), [1, 2, 1], rgb(40, 127, 71), 3);
+box(at(0, 3.2, 5), [2, 2, 1], rgb(13, 105, 172), 3);
+box(at(-1.5, 3.2, 5), [1, 2, 1], rgb(245, 205, 48), 3);
+box(at(1.5, 3.2, 5), [1, 2, 1], rgb(245, 205, 48), 3);
+upright(0, 4.8, 5, 1.2, 1.25, rgb(245, 205, 48), 3, { sides: 24 });
+
+// Counter props
+for (let i = 0; i < 4; i++) upright(-6.2, 3.975 + i * 0.17, 0.8, 0.15, 2.2, rgb(250, 250, 250), 4);
+for (let i = 0; i < 3; i++) upright(-6.2, 4.73 + i * 0.3, 0.8, 0.3, 1.8, rgb(215, 150, 70), 4, { capColor: rgb(226, 168, 88) });
+box(at(-6.2, 5.48, 0.8), [0.5, 0.2, 0.4], rgb(255, 225, 90), 4);
+upright(-7.6, 4.6, -1.5, 1.4, 0.7, rgb(130, 65, 20), 4, { sides: 20 });
+upright(-7.6, 5.45, -1.5, 0.3, 0.4, rgb(210, 50, 50), 4, { sides: 16 });
+upright(7.2, 4.35, -1.2, 0.9, 1.8, rgb(120, 190, 230), 4);
+upright(7.2, 4.8, -1.2, 0.05, 1.6, rgb(250, 236, 200), 4);
+upright(6.2, 3.96, 1.5, 0.12, 1.3, rgb(250, 250, 250), 4);
+box(at(6.2, 4.22, 1.5), [0.7, 0.4, 0.5], rgb(255, 225, 90), 4);
+
+// Burner (neon) with glow
+upright(0, 3.95, 0, 0.1, 4, rgb(255, 100, 30), 4, { emissive: true, cap: { after: burnerGlow } });
+
+// Pan: base, 24 rim blocks, handle
+const PAN = at(0, 4.125, 0);
+upright(0, 4.125, 0, 0.25, 4.5, rgb(55, 55, 60), 5, { cap: { fill: panFill } });
+for (let i = 1; i <= 24; i++) {
+  const B = rotY(i / 24 * Math.PI * 2);
+  box(add(PAN, add(mul(B.ex, 2.3), [0, 0.125, 0])), [0.25, 0.5, 0.65], rgb(40, 40, 45), 5, { basis: B });
+}
+box(add(PAN, [4.1, 0.25, 0]), [3.4, 0.35, 0.6], rgb(70, 45, 30), 5);
+
+// Pancake (charging the flip at PERFECT: golden edge, top still light)
+upright(0, 4.425, 0, 0.35, 3.4, rgb(201, 138, 69), 6, { sides: 48, cap: { fill: pancakeFill, after: pancakeDetails } });
+
+// ---------------- custom face painters ----------------
+function bounds(p) {
+  const xs = p.map(q => q[0]), ys = p.map(q => q[1]);
+  return { x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys),
+    cx: (Math.min(...xs) + Math.max(...xs)) / 2, cy: (Math.min(...ys) + Math.max(...ys)) / 2 };
+}
+function faceText(ctx, p, text, color, fill) {
+  const b = bounds(p), w = b.x1 - b.x0, h = b.y1 - b.y0;
+  let size = h * fill;
+  ctx.font = `${size}px 'Fredoka One'`;
+  const tw = ctx.measureText(text).width;
+  if (tw > w * 0.92) { size *= w * 0.92 / tw; ctx.font = `${size}px 'Fredoka One'`; }
+  ctx.fillStyle = color; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.shadowColor = 'rgba(0,0,0,.25)'; ctx.shadowOffsetY = 2;
+  ctx.fillText(text, b.cx, b.cy + size * 0.05);
+  ctx.shadowColor = 'transparent'; ctx.shadowOffsetY = 0;
+}
+function tileGrid(ctx, p) {
+  // p: projected corners of the backsplash front face
+  ctx.save(); ctx.beginPath(); p.forEach((q, i) => i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1])); ctx.closePath(); ctx.clip();
+  ctx.strokeStyle = 'rgba(160,170,175,.55)'; ctx.lineWidth = 1.2;
+  for (let x = -9; x <= 9; x += 1) { const a = proj(at(x, 3.6, -3.4)), b = proj(at(x, 6.6, -3.4)); ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); }
+  for (let y = 3.6; y <= 6.6; y += 1) { const a = proj(at(-9, y, -3.4)), b = proj(at(9, y, -3.4)); ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); }
+  ctx.restore();
+}
+function clockTicks(ctx) {
+  ctx.fillStyle = '#28282d';
+  for (let i = 0; i < 12; i++) {
+    const t = i / 12 * Math.PI * 2;
+    const q = proj(at(-7.25 + Math.sin(t) * 0.8, 9.6 + Math.cos(t) * 0.8, -3.26));
+    ctx.beginPath(); ctx.arc(q[0], q[1], i % 3 === 0 ? 2.6 : 1.5, 0, Math.PI * 2); ctx.fill();
+  }
+}
+function glassShine(ctx, p) {
+  const b = bounds(p);
+  ctx.save(); ctx.beginPath(); p.forEach((q, i) => i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1])); ctx.closePath(); ctx.clip();
+  ctx.fillStyle = 'rgba(255,255,255,.12)';
+  ctx.beginPath(); ctx.moveTo(b.x0 + 30, b.y1); ctx.lineTo(b.x0 + 80, b.y0); ctx.lineTo(b.x0 + 115, b.y0); ctx.lineTo(b.x0 + 65, b.y1); ctx.fill();
+  ctx.restore();
+}
+function cabinetDoors(ctx, p) {
+  const b = bounds(p);
+  ctx.strokeStyle = 'rgba(120,25,25,.8)'; ctx.lineWidth = 2;
+  const m = 8, mid = b.cx;
+  ctx.strokeRect(b.x0 + m, b.y0 + m + 4, mid - b.x0 - m * 1.5, b.y1 - b.y0 - m * 2 - 4);
+  ctx.strokeRect(mid + m / 2, b.y0 + m + 4, b.x1 - mid - m * 1.5, b.y1 - b.y0 - m * 2 - 4);
+  ctx.fillStyle = '#e8e8ee';
+  ctx.fillRect(mid - 9, b.cy - 12, 4, 20); ctx.fillRect(mid + 5, b.cy - 12, 4, 20);
+}
+function burnerGlow(ctx, p) {
+  const b = bounds(p);
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  const g = ctx.createRadialGradient(b.cx, b.cy, 10, b.cx, b.cy, (b.x1 - b.x0) * 0.75);
+  g.addColorStop(0, 'rgba(255,120,40,.55)'); g.addColorStop(1, 'rgba(255,80,20,0)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(b.cx, b.cy, (b.x1 - b.x0) * 0.75, (b.y1 - b.y0) * 1.1, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+function panFill(ctx, p) {
+  const b = bounds(p);
+  const g = ctx.createLinearGradient(b.x0, b.y0, b.x1, b.y1);
+  g.addColorStop(0, '#4a4a52'); g.addColorStop(0.45, '#2f2f35'); g.addColorStop(0.55, '#3b3b42'); g.addColorStop(1, '#26262b');
+  return g;
+}
+function pancakeFill(ctx, p) {
+  const b = bounds(p);
+  const g = ctx.createRadialGradient(b.cx - 15, b.cy - 6, 5, b.cx, b.cy, (b.x1 - b.x0) / 2);
+  g.addColorStop(0, '#f6e4b4'); g.addColorStop(0.7, '#efd49a'); g.addColorStop(0.92, '#e2b56c'); g.addColorStop(1, '#c98a45');
+  return g;
+}
+let seed = 7;
+const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+function pancakeDetails(ctx) {
+  // batter bubbles on the top (the sign it's nearly ready to flip)
+  for (let i = 0; i < 26; i++) {
+    const t = rand() * Math.PI * 2, rr = Math.sqrt(rand()) * 1.35, s = 0.05 + rand() * 0.08;
+    const c = proj(at(Math.cos(t) * rr, 4.605, Math.sin(t) * rr));
+    const e = proj(at(Math.cos(t) * rr + s, 4.605, Math.sin(t) * rr));
+    const rx = Math.max(1.5, e[0] - c[0]);
+    ctx.fillStyle = 'rgba(205,160,95,.75)';
+    ctx.beginPath(); ctx.ellipse(c[0], c[1], rx, rx * 0.4, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.55)';
+    ctx.beginPath(); ctx.ellipse(c[0] - rx * 0.3, c[1] - rx * 0.12, rx * 0.35, rx * 0.15, 0, 0, Math.PI * 2); ctx.fill();
+  }
+}
+
+// ---------------- draw ----------------
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+
+function drawBackground() {
+  const horizon = proj(add(CAM, [0, 0, -1e5]))[1];
+  const sky = ctx.createLinearGradient(0, 0, 0, horizon);
+  sky.addColorStop(0, '#5aa9ea'); sky.addColorStop(1, '#c4e5fa');
+  ctx.fillStyle = sky; ctx.fillRect(0, 0, W, horizon + 1);
+  const grass = ctx.createLinearGradient(0, horizon, 0, H);
+  grass.addColorStop(0, '#8bcb77'); grass.addColorStop(1, '#6ebe5f');
+  ctx.fillStyle = grass; ctx.fillRect(0, horizon, W, H - horizon);
+  ctx.fillStyle = 'rgba(255,255,255,.85)';
+  for (const [x, y, s] of [[150, 60, 1], [1110, 115, 1.2], [300, 140, .6], [960, 40, .7]]) {
+    ctx.beginPath(); ctx.ellipse(x, y, 70 * s, 18 * s, 0, 0, Math.PI * 2); ctx.ellipse(x - 30 * s, y - 10 * s, 35 * s, 18 * s, 0, 0, Math.PI * 2); ctx.ellipse(x + 25 * s, y - 12 * s, 40 * s, 20 * s, 0, 0, Math.PI * 2); ctx.fill();
+  }
+}
+
+function shade(face) {
+  if (face.emissive) return `rgb(${face.color.join(',')})`;
+  const k = 0.62 + 0.38 * Math.max(0, dot(face.normal, LIGHT));
+  return `rgb(${face.color.map(v => Math.min(255, Math.round(v * k))).join(',')})`;
+}
+
+function drawScene() {
+  drawBackground();
+  const visible = [];
+  for (const f of faces) {
+    const c = mul(f.pts.reduce((a, b) => add(a, b), [0, 0, 0]), 1 / f.pts.length);
+    if (dot(f.normal, sub(CAM, c)) <= 1e-6) continue;
+    f.depth = len(sub(c, CAM));
+    visible.push(f);
+  }
+  visible.sort((a, b) => a.layer - b.layer || b.depth - a.depth);
+  for (const f of visible) {
+    const p = f.pts.map(proj);
+    ctx.beginPath(); p.forEach((q, i) => i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1])); ctx.closePath();
+    const style = f.fill ? f.fill(ctx, p) : shade(f);
+    if (f.glow) { ctx.shadowColor = f.glow; ctx.shadowBlur = 28; }
+    ctx.fillStyle = style; ctx.fill();
+    ctx.shadowBlur = 0; ctx.shadowColor = 'transparent';
+    ctx.strokeStyle = typeof style === 'string' ? style : 'rgba(0,0,0,0)'; ctx.lineWidth = 0.8; ctx.stroke();
+    if (f.after) f.after(ctx, p);
+  }
+
+  // steam + sizzle
+  ctx.lineCap = 'round';
+  for (const [x0, drift, a] of [[-0.8, -0.35, .45], [0.5, 0.3, .4], [1.2, 0.1, .3]]) {
+    const s = proj(at(x0, 4.7, -0.3));
+    ctx.strokeStyle = `rgba(255,255,255,${a})`; ctx.lineWidth = 7;
+    ctx.beginPath(); ctx.moveTo(s[0], s[1]);
+    ctx.bezierCurveTo(s[0] - 22, s[1] - 35, s[0] + 22 + drift * 40, s[1] - 65, s[0] + drift * 60, s[1] - 105); ctx.stroke();
+  }
+  ctx.fillStyle = 'rgba(255,245,220,.9)';
+  for (let i = 0; i < 16; i++) {
+    const t = rand() * Math.PI * 2, rr = 1.75 + rand() * 0.35;
+    const q = proj(at(Math.cos(t) * rr, 4.45 + rand() * 0.5, Math.sin(t) * rr));
+    ctx.beginPath(); ctx.arc(q[0], q[1], 1.2 + rand() * 1.6, 0, Math.PI * 2); ctx.fill();
+  }
+}
+
+// ---------------- UI (same numbers as GameConfig) ----------------
+function buildUI() {
+  document.getElementById('hint').textContent = 'Release when the needle is on the ⭐ gold!';
+
+  // cook meter billboard: PanBase + StudsOffsetWorldSpace (0, 3.4, 0)
+  const bb = proj(at(0, 4.125 + 3.4, 0));
+  const wrap = document.getElementById('meterWrap');
+  wrap.style.left = (bb[0] - 140) + 'px'; wrap.style.top = (bb[1] - 30) + 'px';
+
+  const zones = [[0, .45, '#f5e8c4'], [.45, .60, '#78cd5f'], [.60, .72, '#ffcd28'], [.72, .85, '#78cd5f'], [.85, 1, '#462319']];
+  const meter = document.getElementById('meter');
+  for (const [a, b, c] of zones) {
+    const d = document.createElement('div');
+    d.className = 'band'; d.style.left = (a * 100) + '%'; d.style.width = ((b - a) * 100) + '%'; d.style.background = c;
+    meter.appendChild(d);
+  }
+  const mp = document.createElement('div');
+  mp.style.cssText = 'position:absolute;left:66%;top:-7px;width:5px;height:32px;background:#fff;border:2px solid #3c2314;transform:translateX(-50%);';
+  meter.appendChild(mp);
+
+  const tricks = [
+    { min: .12, max: .40, sweet: .26,  p: .040, g: .090, s: .140, label: 'x1' },
+    { min: .40, max: .65, sweet: .525, p: .030, g: .070, s: .100, label: 'DOUBLE x1.5' },
+    { min: .65, max: .88, sweet: .765, p: .022, g: .050, s: .080, label: 'TRIPLE x2.5' },
+    { min: .88, max: 1.0, sweet: .94,  p: .015, g: .030, s: .045, label: 'TORNADO x5' },
+  ];
+  const power = document.getElementById('power');
+  const band = (a, b, color) => {
+    const d = document.createElement('div');
+    d.className = 'band'; d.style.left = (a * 100) + '%'; d.style.width = ((b - a) * 100) + '%'; d.style.background = color;
+    power.appendChild(d);
+  };
+  for (const t of tricks) {
+    const clamp = tol => [Math.max(t.min, t.sweet - tol), Math.min(t.max, t.sweet + tol)];
+    band(t.min, t.max, '#c83232'); band(...clamp(t.s), '#f59632'); band(...clamp(t.g), '#6ecd5a'); band(...clamp(t.p), '#ffe13c');
+    const div = document.createElement('div');
+    div.style.cssText = `position:absolute;top:0;height:100%;width:2px;background:#3c2314;left:${t.min * 100}%`;
+    power.appendChild(div);
+    const lab = document.createElement('div');
+    lab.className = 'soft';
+    lab.style.cssText = `position:absolute;top:38px;left:${t.min * 100}%;width:${(t.max - t.min) * 100}%;text-align:center;color:#fff;font-size:13px;white-space:nowrap;`;
+    lab.textContent = t.label;
+    power.appendChild(lab);
+  }
+  const needle = document.createElement('div');
+  needle.style.cssText = 'position:absolute;left:51%;top:-9px;width:6px;height:48px;background:#fff;border:2px solid #3c2314;transform:translateX(-50%);box-shadow:0 0 10px rgba(255,255,255,.9);';
+  power.appendChild(needle);
+}
+
+document.fonts.load("40px 'Fredoka One'").finally(() => { drawScene(); buildUI(); });
+</script>
+</body>
+</html>
